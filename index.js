@@ -1,36 +1,31 @@
 const http = require("http");
-
+const express = require("express")
+const app = express()
 const PORT = process.env.PORT || 3000;
 
-const server = http.createServer((req, res) => {
-  const { method, url } = req;
+const taskRoutes = require("../taskapi/routes/tasks_routes.js");
 
-  if (method === "GET" && url === "/health") {
-    res.writeHead(200, {
-      "Content-type": "application/json",
-    });
-    res.end(
-      JSON.stringify({
-        status: "OK",
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString(),
-      })
-    );
-    return;
-  }
+app.use(express.json());
 
-  res.writeHead(400, {
-    "Content-type": "application/json",
+app.use("/tasks", taskRoutes);
+
+
+// Health check
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "OK",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
   });
-  res.end(
-    JSON.stringify({
-      error: "Route not found",
-    })
-  );
 });
 
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
 
-server.listen(PORT,()=>{
-    console.log(`Server is running on ${PORT}`)
-})
-    
+app.listen(PORT, () => {
+  console.log(`Server is running on ${PORT}`);
+});
+
+module.exports = app
