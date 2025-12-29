@@ -1,58 +1,69 @@
-let tasks = [];
-let currentId = 1;
+const Task = require("../models/tasks_models.js");
 
-const getAllTasks = (req, res) => {
-  res.status(200).json(tasks);
+// GET /tasks
+const getAllTasks = async (req, res) => {
+  try {
+    const tasks = await Task.find();
+    res.status(200).json(tasks);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 };
 
-const getTasksbyId = (req, res) => {
-  const id = parseInt(req.params.id);
-  const task = tasks.find((t) => t.id === id);
-  if (!task) return res.status(404).json({ Error: "task not found" });
-  res.status(200).json(task);
+// GET /tasks/:id
+const getTasksbyId = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+    res.status(200).json(task);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 };
 
-const createTask = (req, res) => {
-  const { title, description } = req.body;
-  if (!title) return res.status(404).json({ error: "Title is required" });
+// POST /tasks
+const createTask = async (req, res) => {
+  try {
+    const { title, description } = req.body;
+    if (!title) return res.status(400).json({ error: "Title is required" });
 
-  const newTask = {
-    id: currentId++,
-    title,
-    description: description || "",
-    status: "pending",
-    createdAt: new Date(),
-  };
-
-  tasks.push(newTask);
-  res.status(201).json(newTask);
+    const task = await Task.create({ title, description });
+    res.status(201).json(task);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 };
 
-const updateTask = (req, res) => {
-  const id = parseInt(req.params.id);
-  const task = tasks.find((t) => t.id === id);
-  if (!task) return res.status(404).json({ error: "task not found" });
-
-  const { title, description, status } = req.body;
-
-  if (title) task.title = title;
-  if (description) task.description = description;
-  if (status) task.status = status;
-  res.status(200).json(task);
+// PUT /tasks/:id
+const updateTask = async (req, res) => {
+  try {
+    const task = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!task) return res.status(404).json({ error: "Task not found" });
+    res.status(200).json(task);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 };
 
-const deleteTask = (req, res) => {
-  const { id } = parseInt(req.params.id);
-  const index = tasks.find((t) => t.id === id);
-  if (index === -1) return res.status(404).json({ error: "task not found" });
-
-  tasks.splice(index, 1);
-  res.status(204).send();
+// DELETE /tasks/:id
+const deleteTask = async (req, res) => {
+  try {
+    const task = await Task.findByIdAndDelete(req.params.id);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+    res.status(204).send();
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 };
 
 module.exports = {
   getAllTasks,
-  getTasksbyId,
+  getTasksbyId, // matches router
   createTask,
   updateTask,
   deleteTask,
