@@ -2,6 +2,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db.js");
 const tasksRoutes = require("./routes/tasks_routes.js");
+const authRoutes = require("./routes/auth_routes.js");
 
 dotenv.config();
 connectDB();
@@ -12,6 +13,8 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use("/tasks", tasksRoutes);
+
+app.use("/auth",authRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).json({
