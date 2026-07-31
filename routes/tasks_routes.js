@@ -1,17 +1,15 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const tasksController = require('../controllers/tasks_controller.js'); // should point to your controller
-const { protect } = require('../middleware/auth_middleware.js');
+const tasksController = require("../controllers/tasks_controller.js");
+const { protect } = require("../middleware/auth_middleware.js");
+const { createTaskRules, updateTaskRules, idRule } = require("../middleware/validate.js");
 
-router.use(protect); // Apply authentication middleware to all task routes
+router.use(protect);
 
-
-router.get('/', tasksController.getAllTasks);      // function
-router.get('/:id', tasksController.getTasksbyId);  // function
-router.post('/', tasksController.createTask);
-router.put('/:id', tasksController.updateTask);
-router.delete('/:id', tasksController.deleteTask);
+router.get("/", tasksController.getAllTasks);
+router.get("/:id", idRule, tasksController.getTasksbyId);
+router.post("/", createTaskRules, tasksController.createTask);
+router.put("/:id", idRule, updateTaskRules, tasksController.updateTask);
+router.delete("/:id", idRule, tasksController.deleteTask);
 
 module.exports = router;
-
-
