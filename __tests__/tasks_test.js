@@ -1,139 +1,190 @@
-jest.setTimeout(30000); // 30 seconds timeout for in-memory MongoDB
+jest.setTimeout(30000);
 
 const mongoose = require("mongoose");
-const request = require("supertest");
 const { MongoMemoryServer } = require("mongodb-memory-server");
+const request = require("supertest");
 const express = require("express");
-const bodyParser = require("body-parser");
-
-// Import your Task schema
-const TaskSchema = require("../models/tasks_models.js").schema;
 
 let mongoServer;
-let testConnection;
-let TaskModel;
 let app;
-
-// Controllers wrapped to use in-memory TaskModel
-const makeController = (Model) => {
-  return {
-    getAllTasks: async (req, res) => {
-      try {
-        const tasks = await Model.find();
-        res.status(200).json(tasks);
-      } catch (err) {
-        res.status(500).json({ error: "Internal server error" });
-      }
-    },
-    getTasksbyId: async (req, res) => {
-      try {
-        const task = await Model.findById(req.params.id);
-        if (!task) return res.status(404).json({ error: "Task not found" });
-        res.status(200).json(task);
-      } catch (err) {
-        res.status(500).json({ error: "Internal server error" });
-      }
-    },
-    createTask: async (req, res) => {
-      try {
-        const { title, description } = req.body;
-        if (!title) return res.status(400).json({ error: "Title is required" });
-        const task = await Model.create({ title, description });
-        res.status(201).json(task);
-      } catch (err) {
-        res.status(500).json({ error: "Internal server error" });
-      }
-    },
-    updateTask: async (req, res) => {
-      try {
-        const task = await Model.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if (!task) return res.status(404).json({ error: "Task not found" });
-        res.status(200).json(task);
-      } catch (err) {
-        res.status(500).json({ error: "Internal server error" });
-      }
-    },
-    deleteTask: async (req, res) => {
-      try {
-        const task = await Model.findByIdAndDelete(req.params.id);
-        if (!task) return res.status(404).json({ error: "Task not found" });
-        res.status(204).send();
-      } catch (err) {
-        res.status(500).json({ error: "Internal server error" });
-      }
-    },
-  };
-};
+let token;
 
 beforeAll(async () => {
-  // Start in-memory MongoDB
   mongoServer = await MongoMemoryServer.create();
-  testConnection = await mongoose.createConnection(mongoServer.getUri());
-  
-  // Bind Task model to test connection
-  TaskModel = testConnection.model("Task", TaskSchema);
+  await mongoose.connect(mongoServer.getUri());
 
-  // Create controllers for this test connection
-  const controllers = makeController(TaskModel);
+  process.env.JWT_SECRET = "test-secret";
+  process.env.PORT = "0";
 
-  // Create Express app for testing
+  const tasksRoutes = require("../routes/tasks_routes");
+  const authRoutes = require("../routes/auth_routes");
+
   app = express();
-  app.use(bodyParser.json());
-
-  app.post("/tasks", (req, res) => controllers.createTask(req, res));
-  app.get("/tasks", (req, res) => controllers.getAllTasks(req, res));
-  app.get("/tasks/:id", (req, res) => controllers.getTasksbyId(req, res));
-  app.put("/tasks/:id", (req, res) => controllers.updateTask(req, res));
-  app.delete("/tasks/:id", (req, res) => controllers.deleteTask(req, res));
+  app.use(express.json());
+  app.use("/auth", authRoutes);
+  app.use("/tasks", tasksRoutes);
+  app.use((req, res) => res.status(404).json({ error: "Route not found" }));
 });
 
 afterAll(async () => {
-  await testConnection.dropDatabase();
-  await testConnection.close();
+  await mongoose.disconnect();
   await mongoServer.stop();
 });
 
 afterEach(async () => {
-  await TaskModel.deleteMany({});
+  const collections = mongoose.connection.collections;
+  for (const key in collections) {
+    await collections[key].deleteMany({});
+  }
+  token = undefined;
 });
 
-describe("Tasks API (MongoDB)", () => {
+describe("Auth Routes", () => {
+  it("registers a new user", async () => {
+    const res = await request(app)
+      .post("/auth/register")
+      .send({ username: "testuser", password: "testpass" });
+    expect(res.status).toBe(201);
+    expect(res.body.message).toBe("User created");
+  });
+
+  it("rejects duplicate registration", async () => {
+    await request(app)
+      .post("/auth/register")
+      .send({ username: "dupuser", password: "testpass" });
+    const res = await request(app)
+      .post("/auth/register")
+      .send({ username: "dupuser", password: "testpass" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("User exists");
+  });
+
+  it("rejects missing fields on register", async () => {
+    const res = await request(app)
+      .post("/auth/register")
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it("logs in and returns a token", async () => {
+    await request(app)
+      .post("/auth/register")
+      .send({ username: "loginuser", password: "loginpass" });
+    const res = await request(app)
+      .post("/auth/login")
+      .send({ username: "loginuser", password: "loginpass" });
+    expect(res.status).toBe(200);
+    expect(res.body.token).toBeDefined();
+    token = res.body.token;
+  });
+
+  it("rejects invalid credentials", async () => {
+    const res = await request(app)
+      .post("/auth/login")
+      .send({ username: "nobody", password: "wrong" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Invalid credentials");
+  });
+});
+
+describe("Tasks Routes", () => {
+  beforeEach(async () => {
+    await request(app)
+      .post("/auth/register")
+      .send({ username: "taskuser", password: "taskpass" });
+    const loginRes = await request(app)
+      .post("/auth/login")
+      .send({ username: "taskuser", password: "taskpass" });
+    token = loginRes.body.token;
+  });
+
+  it("rejects unauthenticated requests", async () => {
+    const res = await request(app).get("/tasks");
+    expect(res.status).toBe(401);
+  });
+
   it("creates a task", async () => {
     const res = await request(app)
       .post("/tasks")
+      .set("Authorization", `Bearer ${token}`)
       .send({ title: "Test Task", description: "Test description" });
     expect(res.status).toBe(201);
     expect(res.body.title).toBe("Test Task");
   });
 
-  it("gets all tasks", async () => {
-    await TaskModel.create({ title: "Task 1" });
-    const res = await request(app).get("/tasks");
+  it("rejects task without title", async () => {
+    const res = await request(app)
+      .post("/tasks")
+      .set("Authorization", `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it("gets all tasks for the user", async () => {
+    await request(app)
+      .post("/tasks")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Task 1" });
+    const res = await request(app)
+      .get("/tasks")
+      .set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.length).toBe(1);
   });
 
-  it("gets task by id", async () => {
-    const task = await TaskModel.create({ title: "Task 2" });
-    const res = await request(app).get(`/tasks/${task._id}`);
+  it("gets a task by id", async () => {
+    const createRes = await request(app)
+      .post("/tasks")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "My Task" });
+    const res = await request(app)
+      .get(`/tasks/${createRes.body._id}`)
+      .set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body.title).toBe("Task 2");
+    expect(res.body.title).toBe("My Task");
   });
 
   it("updates a task", async () => {
-    const task = await TaskModel.create({ title: "Old Title" });
+    const createRes = await request(app)
+      .post("/tasks")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Old Title" });
     const res = await request(app)
-      .put(`/tasks/${task._id}`)
+      .put(`/tasks/${createRes.body._id}`)
+      .set("Authorization", `Bearer ${token}`)
       .send({ title: "New Title" });
     expect(res.status).toBe(200);
     expect(res.body.title).toBe("New Title");
   });
 
   it("deletes a task", async () => {
-    const task = await TaskModel.create({ title: "Task to Delete" });
-    const res = await request(app).delete(`/tasks/${task._id}`);
+    const createRes = await request(app)
+      .post("/tasks")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "To Delete" });
+    const res = await request(app)
+      .delete(`/tasks/${createRes.body._id}`)
+      .set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(204);
-    const tasksLeft = await TaskModel.find();
-    expect(tasksLeft.length).toBe(0);
+  });
+
+  it("does not allow access to another user's task", async () => {
+    const createRes = await request(app)
+      .post("/tasks")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "My Private Task" });
+
+    await request(app)
+      .post("/auth/register")
+      .send({ username: "otheruser", password: "otherpass" });
+    const otherLogin = await request(app)
+      .post("/auth/login")
+      .send({ username: "otheruser", password: "otherpass" });
+    const otherToken = otherLogin.body.token;
+
+    const res = await request(app)
+      .get(`/tasks/${createRes.body._id}`)
+      .set("Authorization", `Bearer ${otherToken}`);
+    expect(res.status).toBe(404);
   });
 });

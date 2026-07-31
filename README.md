@@ -1,31 +1,28 @@
 
 ---
 
-# 📝 Task Management API (Phase 4 — Auth & Protected Routes)
+# 📝 Task Management API
 
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat\&logo=node.js\&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-000000?style=flat\&logo=express\&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=flat\&logo=mongodb\&logoColor=white)
-![JWT](https://img.shields.io/badge/JWT-000000?style=flat\&logo=jsonwebtokens\&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 
-A **secure RESTful API** for managing tasks with **Node.js, Express, MongoDB, and JWT authentication**.
-Users can **register, login, and manage their own tasks**. All task routes are **protected**, ensuring user-specific access.
+A **RESTful API** for managing tasks built with **Node.js, Express, and MongoDB**.
+Designed for learning, testing, and as a foundation for SaaS-style backends.
 
 ---
 
-## 🚀 Features (Phase 4)
+## 🚀 Features
 
 * Full **CRUD operations** for tasks
 * Persistent storage using **MongoDB**
-* **User authentication** (JWT)
-* **Password hashing** using bcrypt
-* **Protected routes** — users can only access their own tasks
-* **Async/await controllers** for scalability
+* **Async/await controllers** for scalable backend
 * **RESTful routes** with proper HTTP status codes
-* **Health check endpoint**
+* **Health check endpoint** for monitoring server
 * **Integration tests** using Jest + Supertest
-* Modular structure: controllers, routes, models, middleware
+* Modular structure: controllers, routes, models
+* Ready for **authentication and RBAC** in later phases
 
 ---
 
@@ -33,164 +30,118 @@ Users can **register, login, and manage their own tasks**. All task routes are *
 
 ```
 task-api/
- ├─ index.js                  # Express server entry
- ├─ package.json              # Dependencies & scripts
+ ├─ index.js               # Express server entry
+ ├─ package.json           # Dependencies & scripts
  ├─ config/
- │   └─ db.js                 # MongoDB connection
+ │   └─ db.js              # MongoDB connection
  ├─ models/
- │   ├─ task.model.js         # Mongoose Task schema (linked to user)
- │   └─ user.model.js         # Mongoose User schema
+ │   └─ task.model.js      # Mongoose Task schema
  ├─ controllers/
- │   ├─ tasks.controller.js   # Task CRUD logic (user-protected)
- │   └─ auth.controller.js    # User registration & login
+ │   └─ tasks.controller.js # Task CRUD logic
  ├─ routes/
- │   ├─ tasks.routes.js       # Task routes (protected)
- │   └─ auth.routes.js        # Auth routes (public)
- ├─ middleware/
- │   └─ auth.middleware.js    # JWT token verification
+ │   └─ tasks.routes.js     # Express router
  ├─ __tests__/
- │   └─ tasks.test.js         # Integration tests with in-memory MongoDB
- └─ .env                       # Environment variables
+ │   └─ tasks.test.js       # Integration tests
+ └─ .env                    # Environment variables
 ```
 
 ---
 
 ## ⚡ Getting Started
 
-### 1️⃣ Clone the repository
+### Prerequisites
+
+- Node.js 18+
+- MongoDB instance (local or Atlas)
+
+### Installation
 
 ```bash
 git clone <repo-url>
-cd task-api
-```
-
-### 2️⃣ Install dependencies
-
-```bash
+cd taskapi
 npm install
 ```
 
-### 3️⃣ Configure environment variables
+### Configuration
 
-Create a `.env` file:
+Copy the environment template and fill in your values:
+
+```bash
+cp .env.example .env
+```
 
 ```env
 PORT=3000
 MONGO_URI=mongodb://localhost:27017/task_api
-JWT_SECRET=supersecretkey
 ```
 
-### 4️⃣ Start the server
+### Run
 
 ```bash
-npm run dev   # Nodemon for development
-npm start     # Normal start
+npm run dev      # Development with nodemon
+npm start        # Production start
 ```
 
 Server runs at `http://localhost:3000`
 
 ---
 
-## 📌 API Endpoints (Phase 4)
+## 📌 API Endpoints
 
-### Authentication
+| Method | Endpoint   | Description         | Body Example                                      |
+| ------ | ---------- | ------------------- | ------------------------------------------------- |
+| GET    | /tasks     | Get all tasks       | N/A                                               |
+| GET    | /tasks/:id | Get task by ID      | N/A                                               |
+| POST   | /tasks     | Create a new task   | `{ "title": "Task 1", "description": "..." }`     |
+| PUT    | /tasks/:id | Update a task       | `{ "title": "New Title", "status": "completed" }` |
+| DELETE | /tasks/:id | Delete a task       | N/A                                               |
+| GET    | /health    | Server health check | N/A                                               |
 
-| Method | Endpoint       | Body Example                                 | Auth |
-| ------ | -------------- | -------------------------------------------- | ---- |
-| POST   | /auth/register | `{ "username": "user", "password": "pass" }` | ❌    |
-| POST   | /auth/login    | `{ "username": "user", "password": "pass" }` | ❌    |
+**HTTP Status Codes:**
 
-**Login Response Example:**
-
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
----
-
-### Tasks (Protected — Require JWT)
-
-> **Headers required:**
-> `Authorization: Bearer <JWT_TOKEN>`
-
-| Method | Endpoint   | Body Example                                    | Description                      |
-| ------ | ---------- | ----------------------------------------------- | -------------------------------- |
-| GET    | /tasks     | N/A                                             | Get all tasks for logged-in user |
-| GET    | /tasks/:id | N/A                                             | Get a single task by ID          |
-| POST   | /tasks     | `{ "title": "Task", "description": "..." }`     | Create a new task                |
-| PUT    | /tasks/:id | `{ "title": "Updated", "status": "completed" }` | Update an existing task          |
-| DELETE | /tasks/:id | N/A                                             | Delete a task by ID              |
+* `200 OK` — Success
+* `201 Created` — New resource created
+* `204 No Content` — Deleted successfully
+* `400 Bad Request` — Missing/invalid input
+* `404 Not Found` — Resource not found
 
 ---
 
-### Health Check
+## 🛠 Technologies Used
 
-| Method | Endpoint | Description         |
-| ------ | -------- | ------------------- |
-| GET    | /health  | Check server uptime |
+* **Node.js** — Runtime environment
+* **Express.js** — Web framework
+* **MongoDB** — Database
+* **Mongoose** — ODM for MongoDB
+* **dotenv** — Environment configuration
+* **Jest + Supertest** — Testing framework & HTTP assertions
 
 ---
 
 ## 💻 Example Usage
 
-### Register a User
-
-```bash
-POST /auth/register
-Content-Type: application/json
-
-{
-  "username": "john",
-  "password": "password123"
-}
-```
-
-### Login
-
-```bash
-POST /auth/login
-Content-Type: application/json
-
-{
-  "username": "john",
-  "password": "password123"
-}
-```
-
-**Response:**
-
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
-### Create a Task (Authenticated)
+### Create a Task
 
 ```bash
 POST /tasks
-Authorization: Bearer <TOKEN>
 Content-Type: application/json
 
 {
-  "title": "Finish API",
-  "description": "Test auth-protected endpoints"
+  "title": "Learn Node.js",
+  "description": "Build a task API"
 }
 ```
 
-**Response:**
+### Response
 
 ```json
 {
   "_id": "64f8b3e2c1234567890abcd",
-  "title": "Finish API",
-  "description": "Test auth-protected endpoints",
+  "title": "Learn Node.js",
+  "description": "Build a task API",
   "status": "pending",
-  "user": "64f8b3d1c1234567890abc9",
-  "createdAt": "2026-01-03T12:00:00.000Z",
-  "updatedAt": "2026-01-03T12:00:00.000Z",
+  "createdAt": "2025-12-30T10:00:00.000Z",
+  "updatedAt": "2025-12-30T10:00:00.000Z",
   "__v": 0
 }
 ```
@@ -199,7 +150,7 @@ Content-Type: application/json
 
 ## 🧪 Running Tests
 
-Integration tests use **in-memory MongoDB**:
+Tests use **MongoDB in-memory server** for fast and isolated testing:
 
 ```bash
 npm test
@@ -217,33 +168,25 @@ Tests cover:
 ## 🔹 Key Learnings
 
 * Built **modular backend architecture**
-* Integrated **MongoDB** for persistence
-* Implemented **JWT authentication**
-* Password hashing using **bcrypt**
-* Protected routes for **user-specific data access**
-* Async/await controllers
-* Database-backed **integration tests**
+* Integrated MongoDB for **persistent storage**
+* Refactored controllers for **async/await**
+* Wrote **database-backed integration tests**
+* Ready for **authentication & RBAC**
 
 ---
 
-## 🔜 Next Steps (Phase 5)
+## 🔜 Next Steps (Phase 4)
 
-* Role-Based Access Control (RBAC — Admin vs User)
-* Input validation (Joi/Zod)
-* Centralized error handling
-* Dockerization & deployment
-* Pagination and filtering for tasks
+* Add **User authentication** (JWT)
+* Password hashing
+* Protected routes
+* Role-based access control (RBAC)
 
 ---
 
 ## 📝 Resume / Portfolio Description
 
-> Developed a secure RESTful API with Node.js, Express, and MongoDB. Implemented user authentication with JWT, password hashing, and user-specific task management. Refactored controllers to async/await and wrote database-backed integration tests using Jest and Supertest. Project is production-ready and structured for RBAC and further SaaS-style features.
+> Developed a modular RESTful API using Node.js, Express, and MongoDB. Implemented full CRUD operations, async controllers, database persistence, and integration tests using Jest and Supertest. Prepared the project for authentication and secure access control.
 
 ---
-
-## License
-
-MIT License © 2026
-
 

@@ -16,7 +16,7 @@ const getAllTasks = async (req, res) => {
 // GET /tasks/:id
 const getTasksbyId = async (req, res) => {
   try {
-    const task = await Task.findById({_id :req.params.id, user: req.user.userId});
+    const task = await Task.findOne({ _id: req.params.id, user: req.user.userId });
     if (!task) return res.status(404).json({ error: "Task not found" });
     res.status(200).json(task);
   } catch (error) {
@@ -42,7 +42,11 @@ const createTask = async (req, res) => {
 // PUT /tasks/:id
 const updateTask = async (req, res) => {
   try {
-    const task = await Task.findByIdAndUpdate({ _id: req.params.id, user: req.user.userId }, req.body, { new: true });
+    const task = await Task.findOneAndUpdate(
+      { _id: req.params.id, user: req.user.userId },
+      req.body,
+      { new: true, runValidators: true }
+    );
     if (!task) return res.status(404).json({ error: "Task not found" });
     res.status(200).json(task);
   } catch (error) {
@@ -54,7 +58,7 @@ const updateTask = async (req, res) => {
 // DELETE /tasks/:id
 const deleteTask = async (req, res) => {
   try {
-    const task = await Task.findByIdAndDelete({ _id: req.params.id, user: req.user.userId });
+    const task = await Task.findOneAndDelete({ _id: req.params.id, user: req.user.userId });
     if (!task) return res.status(404).json({ error: "Task not found" });
     res.status(204).send();
   } catch (error) {
