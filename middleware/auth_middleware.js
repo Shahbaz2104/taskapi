@@ -17,6 +17,11 @@ const protect = async (req, res, next) => {
     req.user = { userId: user._id, role: user.role };
     next();
   } catch (err) {
+    if (err.name === "TokenExpiredError") {
+      return res
+        .status(401)
+        .json({ error: "Token expired, please log in again" });
+    }
     return res.status(401).json({ error: "Invalid token" });
   }
 };

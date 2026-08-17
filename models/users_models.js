@@ -8,17 +8,20 @@ const userSchema = new mongoose.Schema(
       required: true,
       unique: true,
       trim: true,
+      minlength: 3,
+      maxlength: 30,
     },
     password: {
       type: String,
       required: true,
+      minlength: 6,
+      maxlength: 72, // bcrypt only uses the first 72 bytes
     },
-    role : {
-      type : String,
-      enum : [ "admin" ,"user"],
-      default : "user"
-
-    }
+    role: {
+      type: String,
+      enum: ["admin", "user"],
+      default: "user",
+    },
   },
   { timestamps: true }
 );
