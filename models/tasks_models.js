@@ -15,8 +15,34 @@ const taskSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "completed"],
+      enum: ["pending", "in_progress", "completed"],
       default: "pending",
+    },
+    priority: {
+      type: String,
+      enum: ["low", "medium", "high"],
+      default: "medium",
+    },
+    dueDate: {
+      type: Date,
+      default: null,
+    },
+    tags: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: (value) => value.length <= 5,
+        message: "At most 5 tags per task",
+      },
+    },
+    recurrence: {
+      type: String,
+      enum: ["daily", "weekly", "monthly", null],
+      default: null,
+    },
+    reminderSent: {
+      type: Boolean,
+      default: false,
     },
     user: {
       type: mongoose.Schema.Types.ObjectId,
@@ -30,5 +56,8 @@ const taskSchema = new mongoose.Schema(
 // Compound index: scoped reads (list by user, sorted by creation) are the
 // hot path — without it Mongo would COLLSCAN every request as data grows.
 taskSchema.index({ user: 1, createdAt: -1 });
+
+// Text index powers ?search= across title and description
+taskSchema.index({ title: "text", description: "text" });
 
 module.exports = mongoose.model("Task", taskSchema);

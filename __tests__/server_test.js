@@ -8,6 +8,7 @@ let mongoServer;
 let app;
 
 beforeAll(async () => {
+  process.env.NODE_ENV = "test";
   mongoServer = await MongoMemoryServer.create();
   process.env.MONGO_URI = mongoServer.getUri();
   process.env.JWT_SECRET = "test-secret";
@@ -34,6 +35,13 @@ describe("Server boot", () => {
     expect(res.body.db).toBe("connected");
   });
 
+  it("exposes prometheus metrics at /metrics", async () => {
+    const res = await request(app).get("/metrics");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/plain");
+    expect(res.text).toContain("process_cpu_seconds_total");
+  });
+
   it("returns 404 for unknown routes", async () => {
     const res = await request(app).get("/nonexistent");
     expect(res.status).toBe(404);
@@ -44,5 +52,15 @@ describe("Server boot", () => {
     const res = await request(app).get("/api-docs/");
     expect(res.status).toBe(200);
     expect(res.text).toContain("Swagger UI");
+  });
+
+  it("serves the full API under /api/v1", async () => {
+    const res = await request(app).post("/api/v1/auth/register").send({
+      username: "bootuser",
+      email: "boot@example.com",
+      password: "bootpass",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.accessToken).toBeDefined();
   });
 });
