@@ -11,7 +11,9 @@ const {
 
 router.use(protect);
 
-// Admin-only route — must be registered before "/:id"
+// Static routes must be registered before "/:id"
+router.get("/stats", tasksController.getStats);
+router.get("/export", tasksController.exportTasks);
 router.get("/all", authorize("admin"), tasksController.getAllTasksAdmin);
 
 router.get("/", tasksController.getAllTasks);

@@ -3,13 +3,22 @@ const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const helmet = require("helmet");
 const cors = require("cors");
-const rateLimit = require("express-rate-limit");
+const compression = require("compression");
+const pinoHttp = require("pino-http");
+const promClient = require("prom-client");
 const { connectDB, disconnectDB } = require("./config/db.js");
+const { initRedis, closeRedis, isAvailable } = require("./config/redis.js");
+const logger = require("./config/logger.js");
+const { buildLimiter } = require("./config/rate_limit.js");
 const swaggerSpec = require("./config/swagger.js");
 const swaggerUi = require("swagger-ui-express");
 const tasksRoutes = require("./routes/tasks_routes.js");
 const authRoutes = require("./routes/auth_routes.js");
+const userRoutes = require("./routes/user_routes.js");
+const adminRoutes = require("./routes/admin_routes.js");
 const errorHandler = require("./middleware/error_handler.js");
+const { startEmailWorker } = require("./jobs/email_worker.js");
+const { startReminderJob } = require("./jobs/reminders.js");
 
 dotenv.config();
 
@@ -24,7 +33,7 @@ if (missingEnv.length > 0) {
   process.exit(1);
 }
 
-connectDB();
+promClient.collectDefaultMetrics();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,17 +44,28 @@ app.set("trust proxy", 1);
 
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
+app.use(compression());
 app.use(
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 100,
-    message: { error: "Too many requests, please try again later" },
+  pinoHttp({
+    logger,
+    genReqId: (req) =>
+      req.headers["x-request-id"] || require("crypto").randomUUID(),
   })
 );
 app.use(express.json());
+app.use(
+  buildLimiter({
+    windowMs: 15 * 60 * 1000,
+    limit: 100,
+    message: { error: "Too many requests, please try again later" },
+    skip: () => process.env.NODE_ENV === "test",
+  })
+);
 
-app.use("/tasks", tasksRoutes);
-app.use("/auth", authRoutes);
+app.use("/api/v1/tasks", tasksRoutes);
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/me", userRoutes);
+app.use("/api/v1/admin", adminRoutes);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.get("/health", (req, res) => {
@@ -61,10 +81,19 @@ app.get("/health", (req, res) => {
 app.get("/ready", async (req, res) => {
   try {
     await mongoose.connection.db.admin().ping();
-    res.status(200).json({ status: "OK", db: "connected" });
+    res.status(200).json({
+      status: "OK",
+      db: "connected",
+      redis: isAvailable() ? "connected" : "unavailable",
+    });
   } catch {
     res.status(503).json({ status: "Unavailable", db: "disconnected" });
   }
+});
+
+app.get("/metrics", async (req, res) => {
+  res.set("Content-Type", promClient.register.contentType);
+  res.end(await promClient.register.metrics());
 });
 
 app.use((req, res) => {
@@ -75,14 +104,19 @@ app.use(errorHandler);
 
 let server;
 if (require.main === module) {
-  server = app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+  const boot = async () => {
+    await initRedis();
+    server = app.listen(PORT, () => {
+      logger.info(`Server running on port ${PORT}`);
+    });
+    startEmailWorker();
+    startReminderJob();
+  };
 
-  // Graceful shutdown
   const shutdown = async (signal) => {
-    console.log(`${signal} received, shutting down gracefully...`);
+    logger.info(`${signal} received, shutting down gracefully...`);
     server.close(async () => {
+      await closeRedis();
       await disconnectDB();
       process.exit(0);
     });
@@ -91,6 +125,14 @@ if (require.main === module) {
   };
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+  boot().catch((err) => {
+    logger.error({ err }, "Boot failed");
+    process.exit(1);
+  });
 }
+
+// Connect at module load so tests (and the app) get a live connection
+connectDB();
 
 module.exports = app;
