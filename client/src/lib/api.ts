@@ -31,6 +31,16 @@ export function getAccessToken() {
 }
 
 const REFRESH_KEY = "taskapi.refresh";
+const SESSION_KEY = "taskapi.session";
+
+export function getSessionId() {
+  return localStorage.getItem(SESSION_KEY);
+}
+
+export function storeSessionId(id: string | undefined) {
+  if (id) localStorage.setItem(SESSION_KEY, id);
+  else localStorage.removeItem(SESSION_KEY);
+}
 
 export function getRefreshToken() {
   return localStorage.getItem(REFRESH_KEY);
@@ -43,6 +53,7 @@ export function storeRefreshToken(token: string) {
 export function clearSession() {
   accessToken = null;
   localStorage.removeItem(REFRESH_KEY);
+  localStorage.removeItem(SESSION_KEY);
 }
 
 interface ApiOptions {

@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/dashboard", label: "Deck" },
   { href: "/shared", label: "Shared" },
   { href: "/trash", label: "Trash" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function AppNav() {
