@@ -26,6 +26,7 @@ tiny amber pulse dot for live sync).
 | `26c7ed6` | P2 auth: `(auth)` route group — login (**username** not email!), `/two-factor` w/ paste-split OtpInput + recovery toggle (challengeToken via sessionStorage `taskapi.challenge`), register (backend returns pair → `adopt()`; dev verificationUrl banner), verify-email/forgot/reset with Suspense-wrapped searchParams; zod schemas in `lib/schemas.ts`; error shake                                                                          |
 | `1d10486` | P3 tasks core: query-key factory + optimistic mutations w/ pure page reducers (identity-preserving patch); TaskDialog (shadcn Dialog + RHF + zod mirroring backend rules); TaskRow (animated complete circle, priority chips, dayjs relative overdue, hover menu); dashboard board w/ status tabs, debounced search, 6 sorts, pagination, skeletons, empty states                                                                              |
 | `520c89e` | P4 trash+stats+export: `apiText()`, trash/bulk/stats/export API fns, useTrash/useTrashMutations/useStats, dashboard stat cards (CountUp) + recharts priority-mix bar + CSV blob download + delete-toast **Undo→restore**, `/trash` page (restore/purge/empty behind AlertDialogs), AppNav Deck/Trash active links. Hand-wrote alert-dialog primitive after CLI flaked                                                                          |
+| `7158f09` | P6 settings hub: /settings tabs Devices/Security/Integrations — sessions w/ current-device badge (token pairs carry sessionId, persisted), 2FA wizard QR→verify→codes-once + disable force-relogin, password change (same signout-everywhere), calendar feed copy/rotate-warning, webhooks manager (create dialog w/ event checkboxes, optimistic toggle, ping queue-offline toast, secret shown-once)                                         |
 | `aa4fa82` | P5 collaboration: collab-api contracts; use-collab hooks (optimistic comment prepend w/ "sending…" marker, optimistic revoke); `/dashboard/task/[id]` detail w/ Tabs Comments/Activity/Access (Access owner-only, viewer 403 → read-only hint), SharePanel grant/revoke, ActivityTimeline rail, `/shared` inbox w/ role badges; TaskRow titles link in; nav "Shared"                                                                           |
 
 Backend untouched this whole stretch (149 tests). Client gates each phase:
@@ -56,7 +57,7 @@ clean, prettier via root.
 
 ## TODO — next phases
 
-### P6 settings hub (next up)
+### P6 settings hub ✅ done
 
 - Sessions/devices: GET `/me/sessions` (list w/ ip/userAgent/current flag),
   DELETE `/me/sessions/:sessionId`, revoke-all exists too — check user_controller
