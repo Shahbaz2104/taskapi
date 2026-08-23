@@ -1,5 +1,6 @@
 const Task = require("../models/tasks_models.js");
 const tasksService = require("../services/tasks.service.js");
+const authService = require("../services/auth.service.js");
 const analytics = require("../services/analytics.service.js");
 const { isAvailable, getClient } = require("../config/redis");
 
@@ -499,6 +500,138 @@ const clearTrash = async (req, res) => {
   res.status(200).json({ deleted: result.deletedCount });
 };
 
+/**
+ * @swagger
+ * /tasks/import:
+ *   post:
+ *     summary: Import tasks from a JSON array or raw CSV (idempotent)
+ *     tags: [Tasks]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: Idempotency-Key, in: header, schema: { type: string }, description: Optional key — retries with the same key replay the original response }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               tasks:
+ *                 type: array
+ *                 maxItems: 500
+ *                 items:
+ *                   type: object
+ *                   required: [title]
+ *                   properties:
+ *                     title: { type: string }
+ *                     description: { type: string }
+ *                     status: { type: string, enum: [pending, in_progress, completed] }
+ *                     priority: { type: string, enum: [low, medium, high] }
+ *                     dueDate: { type: string, format: date-time }
+ *                     tags: { type: array, items: { type: string } }
+ *                     recurrence: { type: string, enum: [daily, weekly, monthly] }
+ *         text/csv:
+ *           schema: { type: string }
+ *           example: "title,status,priority,tags\nPay rent,pending,high,finance;monthly"
+ *     responses:
+ *       200:
+ *         description: Partial-success import report
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 imported: { type: integer }
+ *                 failed:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       row: { type: integer }
+ *                       error: { type: string }
+ *       400:
+ *         description: Empty payload or over the 500-row limit
+ */
+const importTasks = async (req, res) => {
+  const contentType = req.headers["content-type"] || "";
+  let rows;
+  let source;
+
+  if (contentType.includes("text/csv")) {
+    source = "csv";
+    const text = typeof req.body === "string" ? req.body : "";
+    const parsed = tasksService.parseCsvText(text);
+    if (parsed.length < 2) {
+      return res.status(400).json({
+        error: "CSV body requires a header row and at least one data row",
+      });
+    }
+    rows = tasksService.csvRowsToObjects(parsed);
+  } else {
+    source = "json";
+    rows = Array.isArray(req.body) ? req.body : req.body?.tasks;
+    if (!Array.isArray(rows)) {
+      return res.status(400).json({
+        error: "Provide a JSON { tasks: [...] } payload or a text/csv body",
+      });
+    }
+  }
+
+  const result = await tasksService.importTasks({
+    userId: req.user.userId,
+    rows,
+    idempotencyKey: req.header("Idempotency-Key"),
+  });
+
+  if (result.replay) {
+    return res.status(200).json({
+      imported: result.imported,
+      failed: result.failed,
+    });
+  }
+
+  analytics.capture(req.user.userId, "tasks_imported", {
+    source,
+    imported: result.imported,
+    failedCount: result.failed.length,
+  });
+  await invalidateStatsCache(req.user.userId);
+  res.status(200).json(result);
+};
+
+/**
+ * @swagger
+ * /tasks/calendar.ics:
+ *   get:
+ *     summary: Public iCal feed of your tasks (token-authenticated, no JWT)
+ *     tags: [Tasks]
+ *     parameters:
+ *       - { name: token, in: query, required: true, schema: { type: string }, description: Feed token from GET /me/calendar-feed }
+ *     responses:
+ *       200:
+ *         description: VCALENDAR document containing all non-deleted tasks
+ *         content:
+ *           text/calendar:
+ *             schema: { type: string }
+ *       401:
+ *         description: Missing or invalid feed token
+ */
+const getCalendarFeed = async (req, res) => {
+  const token = req.query.token;
+  if (!token) {
+    throw Object.assign(new Error("Feed token required"), { status: 401 });
+  }
+  const user = await authService.findUserByFeedToken(token);
+  if (!user) {
+    throw Object.assign(new Error("Invalid feed token"), { status: 401 });
+  }
+  const ics = await tasksService.buildICalFeed(user._id);
+  analytics.capture(String(user._id), "calendar_feed_viewed");
+  res.set("Content-Type", "text/calendar; charset=utf-8");
+  res.set("Content-Disposition", 'inline; filename="taskapi.ics"');
+  res.status(200).send(ics);
+};
+
 module.exports = {
   getAllTasks,
   getStats,
@@ -511,4 +644,6 @@ module.exports = {
   bulkTasks,
   listTrashedTasks,
   clearTrash,
+  importTasks,
+  getCalendarFeed,
 };

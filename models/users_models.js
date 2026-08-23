@@ -55,8 +55,26 @@ const userSchema = new mongoose.Schema(
       default: [],
       select: false,
     },
+    // iCal feed access token (regenerable) — grants read-only calendar
+    // access without a JWT, so it stays out of default queries
+    calendarFeedToken: {
+      type: String,
+      default: null,
+      select: false,
+    },
   },
   { timestamps: true }
+);
+
+// Fast token → user lookup for public feed requests. A partial filter
+// (not sparse) is required because the field defaults to null — sparse
+// indexes still treat stored nulls as duplicate key material
+userSchema.index(
+  { calendarFeedToken: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { calendarFeedToken: { $type: "string" } },
+  }
 );
 
 // ✅ ASYNC STYLE — NO next()

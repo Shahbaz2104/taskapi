@@ -12,6 +12,30 @@ const RECOVERY_CODE_COUNT = 8;
 const hashToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
+// --- iCal calendar feed tokens ---
+
+const newFeedToken = () => crypto.randomBytes(32).toString("hex");
+
+// Lazily provision on first view so the token only exists once the user
+// opts in to sharing a feed URL
+const getOrCreateFeedToken = async (userId) => {
+  const user = await User.findById(userId).select("calendarFeedToken");
+  if (!user) throw Object.assign(new Error("User not found"), { status: 404 });
+  if (user.calendarFeedToken) return user.calendarFeedToken;
+  user.calendarFeedToken = newFeedToken();
+  await user.save();
+  return user.calendarFeedToken;
+};
+
+const rotateFeedToken = async (userId) => {
+  const token = newFeedToken();
+  await User.updateOne({ _id: userId }, { $set: { calendarFeedToken: token } });
+  return token;
+};
+
+const findUserByFeedToken = async (token) =>
+  User.findOne({ calendarFeedToken: token }).select("_id username email");
+
 const signAccessToken = (userId) =>
   jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: ACCESS_TTL });
 
@@ -184,4 +208,7 @@ module.exports = {
   newRecoveryCodes,
   matchUnusedRecoveryCode,
   hashToken,
+  getOrCreateFeedToken,
+  rotateFeedToken,
+  findUserByFeedToken,
 };
