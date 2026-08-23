@@ -162,6 +162,40 @@ const idRule = mongoIdParamRule("id", "Invalid task ID");
 const userIdRule = mongoIdParamRule("id", "Invalid user ID");
 const sessionIdRule = mongoIdParamRule("sessionId", "Invalid session ID");
 
+const enable2faRules = [
+  body("token")
+    .isString()
+    .trim()
+    .isLength({ min: 6, max: 6 })
+    .withMessage("A 6-digit authenticator code is required"),
+  handleValidation,
+];
+
+const disable2faRules = [
+  body("password").isString().notEmpty().withMessage("Password is required"),
+  body("code").optional().isString(),
+  body("recoveryCode").optional().isString(),
+  body()
+    .custom((v) => Boolean(v.code || v.recoveryCode))
+    .withMessage(
+      "An authenticator code or recovery code is required to disable 2FA"
+    ),
+  handleValidation,
+];
+
+const challenge2faRules = [
+  body("challengeToken")
+    .isString()
+    .notEmpty()
+    .withMessage("Challenge token is required"),
+  body("code").optional().isString(),
+  body("recoveryCode").optional().isString(),
+  body()
+    .custom((v) => Boolean(v.code || v.recoveryCode))
+    .withMessage("An authenticator code or recovery code is required"),
+  handleValidation,
+];
+
 const roleRule = [
   ...userIdRule,
   body("role")
@@ -185,4 +219,7 @@ module.exports = {
   userIdRule,
   sessionIdRule,
   roleRule,
+  enable2faRules,
+  disable2faRules,
+  challenge2faRules,
 };

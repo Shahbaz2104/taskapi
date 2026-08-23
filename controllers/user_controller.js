@@ -2,6 +2,8 @@ const User = require("../models/users_models.js");
 const Task = require("../models/tasks_models.js");
 const Token = require("../models/token_models.js");
 const authService = require("../services/auth.service.js");
+const analytics = require("../services/analytics.service.js");
+const QRCode = require("qrcode");
 
 /**
  * @swagger
@@ -192,6 +194,163 @@ const revokeSession = async (req, res) => {
   res.status(204).send();
 };
 
+/**
+ * @swagger
+ * /me/2fa/setup:
+ *   post:
+ *     summary: Begin 2FA enrollment — returns an otpauth URI and QR code
+ *     tags: [Account]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Pending TOTP secret (not active until /me/2fa/enable)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 otpauthUri: { type: string, example: "otpauth://totp/TaskAPI:alice?secret=..." }
+ *                 qrDataUrl: { type: string, description: PNG data URL of the QR code }
+ *       400:
+ *         description: 2FA is already enabled
+ *       401:
+ *         description: Missing or invalid token
+ */
+const setup2fa = async (req, res) => {
+  const user = await User.findById(req.user.userId).select("+totpSecret");
+  if (user.totpEnabled) {
+    return res
+      .status(400)
+      .json({ error: "2FA is already enabled — disable it first" });
+  }
+
+  const { secret, otpauthUri } = authService.buildTotpSetup(user.username);
+  user.totpSecret = secret;
+  await user.save();
+
+  const qrDataUrl = await QRCode.toDataURL(otpauthUri);
+  res.status(200).json({ otpauthUri, qrDataUrl });
+};
+
+/**
+ * @swagger
+ * /me/2fa/enable:
+ *   post:
+ *     summary: Confirm 2FA with a code from the authenticator app
+ *     tags: [Account]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token]
+ *             properties:
+ *               token: { type: string, description: Current 6-digit TOTP code, example "123456" }
+ *     responses:
+ *       200:
+ *         description: 2FA enabled — recovery codes returned once and never again
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *                 recoveryCodes: { type: array, items: { type: string } }
+ *       400:
+ *         description: No pending setup or invalid code
+ *       401:
+ *         description: Missing or invalid token
+ */
+const enable2fa = async (req, res) => {
+  const user = await User.findById(req.user.userId).select(
+    "+totpSecret +recoveryCodes"
+  );
+  if (!user.totpSecret) {
+    return res.status(400).json({ error: "Start 2FA setup first" });
+  }
+
+  if (!authService.isTotpValid(user.totpSecret, req.body.token)) {
+    return res.status(400).json({ error: "Invalid verification code" });
+  }
+
+  const plaintextCodes = authService.newRecoveryCodes();
+  user.recoveryCodes = plaintextCodes.map((c) => ({
+    codeHash: authService.hashToken(c),
+    usedAt: null,
+  }));
+  user.totpEnabled = true;
+  await user.save();
+
+  analytics.capture(user._id, "2fa_enabled");
+  res.status(200).json({
+    message: "2FA enabled — store your recovery codes safely",
+    recoveryCodes: plaintextCodes,
+  });
+};
+
+/**
+ * @swagger
+ * /me/2fa/disable:
+ *   post:
+ *     summary: Turn off 2FA (password + current code or recovery code required)
+ *     tags: [Account]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [password]
+ *             properties:
+ *               password: { type: string }
+ *               code: { type: string, description: 6-digit TOTP code }
+ *               recoveryCode: { type: string, description: Single-use recovery code }
+ *     responses:
+ *       200:
+ *         description: 2FA disabled and all sessions revoked
+ *       400:
+ *         description: Wrong password, missing/wrong code, or 2FA not enabled
+ *       401:
+ *         description: Missing or invalid token
+ */
+const disable2fa = async (req, res) => {
+  const { password, code, recoveryCode } = req.body;
+
+  const user = await User.findById(req.user.userId).select(
+    "+totpSecret +recoveryCodes"
+  );
+  if (!user.totpEnabled) {
+    return res.status(400).json({ error: "2FA is not enabled" });
+  }
+
+  const isMatch = await user.comparePassword(password);
+  if (!isMatch) {
+    return res.status(400).json({ error: "Password is incorrect" });
+  }
+
+  const codeOk =
+    (code && authService.isTotpValid(user.totpSecret, code)) ||
+    (!!recoveryCode &&
+      !!authService.matchUnusedRecoveryCode(user, recoveryCode));
+  if (!codeOk) {
+    return res.status(400).json({
+      error: "Provide your authenticator code or a valid recovery code",
+    });
+  }
+
+  user.totpSecret = null;
+  user.totpEnabled = false;
+  user.recoveryCodes = [];
+  await user.save();
+  await authService.revokeAllUserTokens(user._id);
+
+  analytics.capture(user._id, "2fa_disabled");
+  res.status(200).json({ message: "2FA disabled — please log in again" });
+};
+
 module.exports = {
   getMe,
   updateMe,
@@ -199,4 +358,7 @@ module.exports = {
   deleteMe,
   listSessions,
   revokeSession,
+  setup2fa,
+  enable2fa,
+  disable2fa,
 };

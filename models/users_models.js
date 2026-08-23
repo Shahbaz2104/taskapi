@@ -33,6 +33,28 @@ const userSchema = new mongoose.Schema(
       enum: ["admin", "user"],
       default: "user",
     },
+    // Two-factor authentication — the secret and recovery codes are
+    // sensitive, so they stay out of default queries (opt in with
+    // .select("+totpSecret +recoveryCodes"))
+    totpSecret: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    totpEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    recoveryCodes: {
+      type: [
+        {
+          codeHash: { type: String, required: true },
+          usedAt: { type: Date, default: null },
+        },
+      ],
+      default: [],
+      select: false,
+    },
   },
   { timestamps: true }
 );

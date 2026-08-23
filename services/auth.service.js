@@ -1,10 +1,13 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const { authenticator } = require("otplib");
 const User = require("../models/users_models.js");
 const Token = require("../models/token_models.js");
 
 const ACCESS_TTL = Number(process.env.ACCESS_TOKEN_TTL) || 900;
 const REFRESH_TTL = Number(process.env.REFRESH_TOKEN_TTL) || 604800;
+const CHALLENGE_TTL = "5m";
+const RECOVERY_CODE_COUNT = 8;
 
 const hashToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
@@ -109,6 +112,64 @@ const revokeSessionById = async (userId, sessionId) => {
   }
 };
 
+// --- Two-factor authentication (TOTP + recovery codes) ---
+
+// Allow ±1 time-step (±30s) of clock drift between server and device
+authenticator.options = { window: 1 };
+
+const buildTotpSetup = (username) => {
+  const secret = authenticator.generateSecret();
+  const otpauthUri = authenticator.keyuri(username, "TaskAPI", secret);
+  return { secret, otpauthUri };
+};
+
+const isTotpValid = (secret, token) => {
+  try {
+    return authenticator.check(String(token), secret);
+  } catch {
+    return false;
+  }
+};
+
+// Short-lived, purpose-scoped JWT proving the password step succeeded
+const createChallengeToken = (userId) =>
+  jwt.sign({ userId, purpose: "2fa_challenge" }, process.env.JWT_SECRET, {
+    expiresIn: CHALLENGE_TTL,
+  });
+
+const verifyChallengeToken = (token) => {
+  let payload;
+  try {
+    payload = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    throw Object.assign(new Error("Invalid or expired challenge token"), {
+      status: 401,
+    });
+  }
+  if (payload.purpose !== "2fa_challenge") {
+    throw Object.assign(new Error("Invalid challenge token"), { status: 401 });
+  }
+  return payload.userId;
+};
+
+const newRecoveryCodes = () =>
+  Array.from({ length: RECOVERY_CODE_COUNT }, () =>
+    crypto.randomBytes(8).toString("hex")
+  );
+
+// Returns the matching unused recovery subdocument, marking it used on the
+// caller's behalf — caller must save() the user document
+const matchUnusedRecoveryCode = (user, code) => {
+  if (!code || !Array.isArray(user.recoveryCodes)) return null;
+  const hash = hashToken(String(code));
+  const entry = user.recoveryCodes.find(
+    (rc) => rc.codeHash === hash && !rc.usedAt
+  );
+  if (!entry) return null;
+  entry.usedAt = new Date();
+  return entry;
+};
+
 module.exports = {
   issueTokenPair,
   refreshAccessToken,
@@ -116,5 +177,11 @@ module.exports = {
   revokeAllUserTokens,
   listUserSessions,
   revokeSessionById,
+  buildTotpSetup,
+  isTotpValid,
+  createChallengeToken,
+  verifyChallengeToken,
+  newRecoveryCodes,
+  matchUnusedRecoveryCode,
   hashToken,
 };

@@ -8,6 +8,7 @@ const {
   verifyEmailRules,
   forgotPasswordRules,
   resetPasswordRules,
+  challenge2faRules,
 } = require("../middleware/validate.js");
 const router = express.Router();
 
@@ -57,6 +58,13 @@ router.post(
   authController.register
 );
 router.post("/login", loginLimiter, loginRules, authController.login);
+// Same brute-force exposure as login — share its limiter
+router.post(
+  "/2fa/challenge",
+  loginLimiter,
+  challenge2faRules,
+  authController.verify2faChallenge
+);
 router.post("/refresh", refreshLimiter, refreshRules, authController.refresh);
 router.post("/logout", refreshRules, authController.logout);
 router.post("/verify-email", verifyEmailRules, authController.verifyEmail);

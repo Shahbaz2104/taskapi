@@ -131,7 +131,79 @@ const login = async (req, res) => {
     return res.status(400).json({ error: "Invalid credentials" });
   }
 
+  // With 2FA enabled the password step only issues a short-lived,
+  // purpose-scoped challenge token — the token pair comes after
+  // verifying an authenticator or recovery code at /auth/2fa/challenge
+  if (user.totpEnabled) {
+    return res.status(200).json({
+      requires2FA: true,
+      challengeToken: authService.createChallengeToken(user._id),
+      message: "Enter your authenticator code",
+    });
+  }
+
   analytics.capture(user._id, "user_logged_in");
+  res.status(200).json(
+    await authService.issueTokenPair(user._id, {
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    })
+  );
+};
+
+/**
+ * @swagger
+ * /auth/2fa/challenge:
+ *   post:
+ *     summary: Complete a 2FA login with an authenticator or recovery code
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [challengeToken]
+ *             properties:
+ *               challengeToken: { type: string, description: From the login response when requires2FA is true }
+ *               code: { type: string, description: 6-digit TOTP code from the authenticator app }
+ *               recoveryCode: { type: string, description: Single-use recovery code (alternative to code) }
+ *     responses:
+ *       200:
+ *         description: Token pair issued
+ *         content:
+ *           application/json:
+ *             schema: { $ref: "#/components/schemas/AuthResponse" }
+ *       401:
+ *         description: Invalid/expired challenge or wrong code
+ */
+const verify2faChallenge = async (req, res) => {
+  const { challengeToken, code, recoveryCode } = req.body;
+  const userId = authService.verifyChallengeToken(challengeToken);
+
+  const user = await User.findById(userId).select("+totpSecret +recoveryCodes");
+  if (!user || !user.totpEnabled) {
+    throw Object.assign(new Error("Invalid or expired challenge token"), {
+      status: 401,
+    });
+  }
+
+  let usedRecovery = false;
+  if (code && authService.isTotpValid(user.totpSecret, code)) {
+    // valid authenticator code
+  } else if (
+    recoveryCode &&
+    authService.matchUnusedRecoveryCode(user, recoveryCode)
+  ) {
+    usedRecovery = true;
+  } else {
+    analytics.capture(user._id, "login_failed");
+    return res.status(401).json({ error: "Invalid authentication code" });
+  }
+
+  if (usedRecovery) await user.save();
+
+  analytics.capture(user._id, "user_logged_in", { via2FA: true });
   res.status(200).json(
     await authService.issueTokenPair(user._id, {
       ip: req.ip,
@@ -325,6 +397,7 @@ const resetPassword = async (req, res) => {
 module.exports = {
   register,
   login,
+  verify2faChallenge,
   refresh,
   logout,
   verifyEmail,
