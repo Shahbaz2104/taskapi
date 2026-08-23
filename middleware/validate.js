@@ -161,6 +161,7 @@ const mongoIdParamRule = (field, message) => [
 const idRule = mongoIdParamRule("id", "Invalid task ID");
 const userIdRule = mongoIdParamRule("id", "Invalid user ID");
 const sessionIdRule = mongoIdParamRule("sessionId", "Invalid session ID");
+const shareIdRule = mongoIdParamRule("shareId", "Invalid share ID");
 
 const enable2faRules = [
   body("token")
@@ -238,6 +239,7 @@ module.exports = {
   idRule,
   userIdRule,
   sessionIdRule,
+  shareIdRule,
   roleRule,
   enable2faRules,
   disable2faRules,

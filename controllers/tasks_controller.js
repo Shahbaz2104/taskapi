@@ -3,6 +3,7 @@ const tasksService = require("../services/tasks.service.js");
 const authService = require("../services/auth.service.js");
 const webhooks = require("../services/webhooks.service.js");
 const analytics = require("../services/analytics.service.js");
+const collab = require("../services/collab.service.js");
 const { isAvailable, getClient } = require("../config/redis");
 
 const STATS_CACHE_TTL = 60;
@@ -201,13 +202,15 @@ const getAllTasksAdmin = async (req, res) => {
  *         description: Task not found
  */
 const getTaskById = async (req, res) => {
-  const task = await Task.findOne({
-    _id: req.params.id,
-    user: req.user.userId,
-    deletedAt: null,
+  // Access chokepoint — owner or any shared collaborator (viewer+);
+  // non-members and nonexistent tasks are indistinguishable (404)
+  const access = await collab.loadTaskWithAccess({
+    taskId: req.params.id,
+    userId: req.user.userId,
+    minRole: "viewer",
   });
-  if (!task) return res.status(404).json({ error: "Task not found" });
-  res.status(200).json(task);
+  if (!access) return res.status(404).json({ error: "Task not found" });
+  res.status(200).json(access.task);
 };
 
 /**
@@ -327,9 +330,20 @@ const updateTask = async (req, res) => {
       .json({ error: "At least one field to update is required" });
   }
 
-  const task = await tasksService.updateTask({
+  // Editors (and the owner) may update through the access chokepoint;
+  // viewers and strangers collapse to 404
+  const access = await collab.loadTaskWithAccess({
     taskId: req.params.id,
     userId: req.user.userId,
+    minRole: "editor",
+  });
+  if (!access) return res.status(404).json({ error: "Task not found" });
+
+  const task = await tasksService.updateTask({
+    taskId: req.params.id,
+    // Mutations and recurrence spawning operate on the owner's document,
+    // regardless of which collaborator performed the update
+    userId: access.task.user,
     updates,
   });
   if (!task) return res.status(404).json({ error: "Task not found" });

@@ -8,7 +8,10 @@ const {
   updateTaskRules,
   idRule,
   bulkTaskRules,
+  shareIdRule,
 } = require("../middleware/validate.js");
+const { zodValidate } = require("../middleware/zod_validate.js");
+const collabController = require("../controllers/collab_controller.js");
 
 // Public iCal feed — authenticated by per-user feed token in the query
 // string (calendar clients can't send Authorization headers), so it is
@@ -35,5 +38,29 @@ router.get("/:id", idRule, tasksController.getTaskById);
 router.post("/", createTaskRules, tasksController.createTask);
 router.put("/:id", idRule, updateTaskRules, tasksController.updateTask);
 router.delete("/:id", idRule, tasksController.deleteTask);
+
+// Collaboration (nested under an existing task) — access is resolved by
+// the collab chokepoint: owner > editor > viewer; strangers get 404
+router.post(
+  "/:id/shares",
+  idRule,
+  zodValidate(collabController.createShareSchema),
+  collabController.createShare
+);
+router.get("/:id/shares", idRule, collabController.listShares);
+router.delete(
+  "/:id/shares/:shareId",
+  idRule,
+  shareIdRule,
+  collabController.revokeShare
+);
+router.get("/:id/comments", idRule, collabController.listComments);
+router.post(
+  "/:id/comments",
+  idRule,
+  zodValidate(collabController.createCommentSchema),
+  collabController.addComment
+);
+router.get("/:id/activity", idRule, collabController.getActivity);
 
 module.exports = router;

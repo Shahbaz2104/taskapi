@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const userController = require("../controllers/user_controller.js");
 const webhooksController = require("../controllers/webhooks_controller.js");
+const collabController = require("../controllers/collab_controller.js");
 const { protect } = require("../middleware/auth_middleware.js");
 const { zodValidate } = require("../middleware/zod_validate.js");
 const {
@@ -23,6 +24,8 @@ router.post("/2fa/setup", userController.setup2fa);
 router.post("/2fa/enable", enable2faRules, userController.enable2fa);
 router.post("/2fa/disable", disable2faRules, userController.disable2fa);
 router.get("/sessions", userController.listSessions);
+// Tasks shared with this account by other users
+router.get("/shared", collabController.listSharedForMe);
 router.delete(
   "/sessions/:sessionId",
   sessionIdRule,
