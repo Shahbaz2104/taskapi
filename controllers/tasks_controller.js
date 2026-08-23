@@ -1,5 +1,6 @@
 const Task = require("../models/tasks_models.js");
 const tasksService = require("../services/tasks.service.js");
+const analytics = require("../services/analytics.service.js");
 const { isAvailable, getClient } = require("../config/redis");
 
 const STATS_CACHE_TTL = 60;
@@ -241,6 +242,11 @@ const createTask = async (req, res) => {
     idempotencyKey: req.header("Idempotency-Key"),
   });
   if (result.replay) return res.status(result.statusCode).json(result.task);
+  analytics.capture(req.user.userId, "task_created", {
+    priority: result.task.priority,
+    hasDueDate: !!result.task.dueDate,
+    recurring: !!result.task.recurrence,
+  });
   res.status(201).json(result.task);
 };
 
@@ -339,6 +345,7 @@ const deleteTask = async (req, res) => {
     user: req.user.userId,
   });
   if (!task) return res.status(404).json({ error: "Task not found" });
+  analytics.capture(req.user.userId, "task_deleted");
   res.status(204).send();
 };
 

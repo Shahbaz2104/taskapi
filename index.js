@@ -8,6 +8,7 @@ const pinoHttp = require("pino-http");
 const promClient = require("prom-client");
 const { connectDB, disconnectDB } = require("./config/db.js");
 const { initRedis, closeRedis, isAvailable } = require("./config/redis.js");
+const { initPosthog, shutdownPosthog } = require("./config/posthog.js");
 const logger = require("./config/logger.js");
 const { buildLimiter } = require("./config/rate_limit.js");
 const swaggerSpec = require("./config/swagger.js");
@@ -106,6 +107,7 @@ let server;
 if (require.main === module) {
   const boot = async () => {
     await initRedis();
+    initPosthog();
     server = app.listen(PORT, () => {
       logger.info(`Server running on port ${PORT}`);
     });
@@ -116,6 +118,7 @@ if (require.main === module) {
   const shutdown = async (signal) => {
     logger.info(`${signal} received, shutting down gracefully...`);
     server.close(async () => {
+      await shutdownPosthog();
       await closeRedis();
       await disconnectDB();
       process.exit(0);
