@@ -6,6 +6,8 @@ export type Recurrence = "daily" | "weekly" | "monthly";
 
 export interface Task {
   _id: string;
+  /** Owner id — lets the detail page decide who manages access. */
+  user?: string;
   title: string;
   description?: string;
   status: TaskStatus;

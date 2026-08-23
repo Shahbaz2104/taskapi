@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
+import Link from "next/link";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import {
@@ -71,13 +72,14 @@ export function TaskRow({
       </button>
 
       <div className="min-w-0 flex-1">
-        <p
-          className={`truncate text-sm font-medium transition-colors duration-200 ${
+        <Link
+          href={`/dashboard/task/${task._id}`}
+          className={`block truncate text-sm font-medium transition-colors duration-200 hover:text-amber-bright ${
             done ? "text-ink-3 line-through" : "text-ink"
           }`}
         >
           {task.title}
-        </p>
+        </Link>
         {task.description && (
           <p className="mt-0.5 truncate text-xs text-ink-3">
             {task.description}
