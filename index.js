@@ -9,6 +9,11 @@ const promClient = require("prom-client");
 const { connectDB, disconnectDB } = require("./config/db.js");
 const { initRedis, closeRedis, isAvailable } = require("./config/redis.js");
 const { initPosthog, shutdownPosthog } = require("./config/posthog.js");
+const {
+  initSentry,
+  closeSentry,
+  attachSentryErrorHandler,
+} = require("./config/sentry.js");
 const logger = require("./config/logger.js");
 const { buildLimiter } = require("./config/rate_limit.js");
 const swaggerSpec = require("./config/swagger.js");
@@ -36,6 +41,9 @@ if (missingEnv.length > 0) {
 }
 
 promClient.collectDefaultMetrics();
+
+// Initialize error tracking before any fallible boot work
+initSentry();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -102,6 +110,8 @@ app.use((req, res) => {
   res.status(404).json({ error: "Route not found" });
 });
 
+// Sentry captures route errors here and forwards them down the chain
+attachSentryErrorHandler(app);
 app.use(errorHandler);
 
 let server;
@@ -121,6 +131,7 @@ if (require.main === module) {
     logger.info(`${signal} received, shutting down gracefully...`);
     server.close(async () => {
       await shutdownPosthog();
+      await closeSentry();
       await closeRedis();
       await disconnectDB();
       process.exit(0);

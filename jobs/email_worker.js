@@ -1,6 +1,7 @@
 const { Worker } = require("bullmq");
 const { sendDirect } = require("../services/email.service.js");
 const { getClient, isAvailable } = require("../config/redis");
+const { reportError } = require("../config/sentry");
 const logger = require("../config/logger");
 
 let worker = null;
@@ -14,9 +15,10 @@ const startEmailWorker = () => {
     },
     { connection: getClient() }
   );
-  worker.on("failed", (job, err) =>
-    logger.error({ err, jobId: job?.id }, "Email job failed")
-  );
+  worker.on("failed", (job, err) => {
+    logger.error({ err, jobId: job?.id }, "Email job failed");
+    reportError(err, { queue: "emails", jobId: job?.id });
+  });
   logger.info("Email worker started");
 };
 
