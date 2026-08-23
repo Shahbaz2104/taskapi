@@ -17,6 +17,7 @@ import {
   getAccessToken,
   getRefreshToken,
   refreshTokens,
+  storeSessionId,
   setAccessToken,
   storeRefreshToken,
 } from "@/lib/api";
@@ -26,6 +27,7 @@ export interface User {
   username: string;
   email: string;
   role?: string;
+  totpEnabled?: boolean;
 }
 
 type LoginOutcome =
@@ -77,9 +79,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /** Adopt a fresh token pair + hydrate profile. */
   const adoptSession = useCallback(
-    async (accessToken: string, refreshToken: string) => {
+    async (accessToken: string, refreshToken: string, sessionId?: string) => {
       setAccessToken(accessToken);
       storeRefreshToken(refreshToken);
+      storeSessionId(sessionId);
       const me = await api<User>("/me");
       setUser(me);
       setStatus("auth");
@@ -123,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await api<{
         requires2FA?: boolean;
         challengeToken?: string;
+        sessionId?: string;
         accessToken?: string;
         refreshToken?: string;
       }>("/auth/login", { method: "POST", body: { username, password } });
@@ -130,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.requires2FA && data.challengeToken) {
         return { kind: "challenge", challengeToken: data.challengeToken };
       }
-      await adoptSession(data.accessToken!, data.refreshToken!);
+      await adoptSession(data.accessToken!, data.refreshToken!, data.sessionId);
       return { kind: "ok" };
     },
     [adoptSession]
@@ -144,11 +148,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const challenge = useCallback<AuthValue["challenge"]>(
     async ({ challengeToken, code, recoveryCode }) => {
-      const data = await api<{ accessToken: string; refreshToken: string }>(
-        "/auth/2fa/challenge",
-        { method: "POST", body: { challengeToken, code, recoveryCode } }
-      );
-      await adoptSession(data.accessToken, data.refreshToken);
+      const data = await api<{
+        sessionId?: string;
+        accessToken: string;
+        refreshToken: string;
+      }>("/auth/2fa/challenge", {
+        method: "POST",
+        body: { challengeToken, code, recoveryCode },
+      });
+      await adoptSession(data.accessToken, data.refreshToken, data.sessionId);
     },
     [adoptSession]
   );
