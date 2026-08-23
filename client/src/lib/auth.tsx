@@ -34,7 +34,10 @@ type LoginOutcome =
 interface AuthValue {
   status: "loading" | "anon" | "auth";
   user: User | null;
-  login(email: string, password: string): Promise<LoginOutcome>;
+  /** Backend authenticates by username. */
+  login(username: string, password: string): Promise<LoginOutcome>;
+  /** Adopt an externally-obtained pair (e.g. right after registration). */
+  adopt(accessToken: string, refreshToken: string): Promise<void>;
   challenge(input: {
     challengeToken: string;
     code?: string;
@@ -116,13 +119,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [scheduleProactiveRefresh]);
 
   const login = useCallback(
-    async (email: string, password: string): Promise<LoginOutcome> => {
+    async (username: string, password: string): Promise<LoginOutcome> => {
       const data = await api<{
         requires2FA?: boolean;
         challengeToken?: string;
         accessToken?: string;
         refreshToken?: string;
-      }>("/auth/login", { method: "POST", body: { email, password } });
+      }>("/auth/login", { method: "POST", body: { username, password } });
 
       if (data.requires2FA && data.challengeToken) {
         return { kind: "challenge", challengeToken: data.challengeToken };
@@ -130,6 +133,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await adoptSession(data.accessToken!, data.refreshToken!);
       return { kind: "ok" };
     },
+    [adoptSession]
+  );
+
+  const adopt = useCallback<AuthValue["adopt"]>(
+    async (accessToken, refreshToken) =>
+      adoptSession(accessToken, refreshToken),
     [adoptSession]
   );
 
@@ -164,7 +173,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ status, user, login, challenge, logout }}>
+    <AuthContext.Provider
+      value={{ status, user, login, adopt, challenge, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
