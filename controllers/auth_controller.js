@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/users_models.js");
 const authService = require("../services/auth.service.js");
+const analytics = require("../services/analytics.service.js");
 const { sendMail, wrap } = require("../services/email.service.js");
 
 const sendVerificationEmail = async (user) => {
@@ -66,6 +67,8 @@ const register = async (req, res) => {
       await sendVerificationEmail(user);
     }
 
+    analytics.capture(user._id, "user_registered");
+
     res.status(201).json({
       message: "User created",
       userId: user._id,
@@ -114,11 +117,18 @@ const login = async (req, res) => {
   const { username, password } = req.body;
 
   const user = await User.findOne({ username });
-  if (!user) return res.status(400).json({ error: "Invalid credentials" });
+  if (!user) {
+    analytics.capture(username || "unknown", "login_failed");
+    return res.status(400).json({ error: "Invalid credentials" });
+  }
 
   const isMatch = await user.comparePassword(password);
-  if (!isMatch) return res.status(400).json({ error: "Invalid credentials" });
+  if (!isMatch) {
+    analytics.capture(user._id, "login_failed");
+    return res.status(400).json({ error: "Invalid credentials" });
+  }
 
+  analytics.capture(user._id, "user_logged_in");
   res.status(200).json(await authService.issueTokenPair(user._id));
 };
 
@@ -216,6 +226,7 @@ const verifyEmail = async (req, res) => {
       .status(400)
       .json({ error: "Invalid or expired verification token" });
 
+  analytics.capture(user._id, "email_verified");
   res.status(200).json({ message: "Email verified" });
 };
 
@@ -243,6 +254,7 @@ const verifyEmail = async (req, res) => {
 const forgotPassword = async (req, res) => {
   const user = await User.findOne({ email: req.body.email });
   if (user) {
+    analytics.capture(user._id, "password_reset_requested");
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: "30m",
     });
@@ -298,6 +310,7 @@ const resetPassword = async (req, res) => {
   await user.save();
   await authService.revokeAllUserTokens(user._id);
 
+  analytics.capture(user._id, "password_reset_completed");
   res.status(200).json({ message: "Password reset" });
 };
 

@@ -1,5 +1,6 @@
 const Task = require("../models/tasks_models.js");
 const Idempotency = require("../models/idempotency_models.js");
+const analytics = require("./analytics.service.js");
 
 const STATUSES = ["pending", "in_progress", "completed"];
 const SORT_FIELDS = ["createdAt", "updatedAt", "dueDate", "priority"];
@@ -152,6 +153,12 @@ const updateTask = async ({ taskId, userId, updates }) => {
       tags: existing.tags,
       recurrence: existing.recurrence,
       user: userId,
+    });
+  }
+
+  if (updates.status === "completed" && existing.status !== "completed") {
+    analytics.capture(userId, "task_completed", {
+      recurring: !!existing.recurrence,
     });
   }
 
