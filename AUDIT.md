@@ -12,11 +12,11 @@ The codebase is well-structured for its scale — clean layering (`routes → co
 
 | Severity | Count |
 | -------- | ----- |
-| Critical | 1 |
-| High     | 1 |
-| Medium   | 4 |
-| Low      | 6 |
-| Info     | 4 |
+| Critical | 1     |
+| High     | 1     |
+| Medium   | 4     |
+| Low      | 6     |
+| Info     | 4     |
 
 ---
 
@@ -26,7 +26,7 @@ The codebase is well-structured for its scale — clean layering (`routes → co
 
 - **Location:** `.env` (tracked file), first committed in `282650d`, present through `HEAD` → pushed to `origin/main` (`github.com/Shahbaz2104/taskapi`)
 - **Evidence:** `git ls-files --error-unmatch .env` succeeds; `git show HEAD:.env` contains a full Atlas connection string with embedded username/password and `JWT_SECRET`
-- **Impact:** Anyone who can clone the repo obtains database credentials and the JWT signing secret. With the JWT secret, valid access tokens for *any* user can be forged. `.gitignore` lists `.env`, but the entry was added after tracking began, so ignore never applied.
+- **Impact:** Anyone who can clone the repo obtains database credentials and the JWT signing secret. With the JWT secret, valid access tokens for _any_ user can be forged. `.gitignore` lists `.env`, but the entry was added after tracking began, so ignore never applied.
 - **Remediation (in order):**
   1. Rotate now: change the Atlas user password and generate a new `JWT_SECRET` — treat both as compromised regardless of repo visibility
   2. `git rm --cached .env` so future changes stop being committed
@@ -120,12 +120,12 @@ The codebase is well-structured for its scale — clean layering (`routes → co
 
 Weakest areas align with infra/async edges (harder to test, currently untested by design):
 
-| Area | Lines | Gap |
-| ---- | ----- | --- |
-| `config/redis.js` | 33% | connect/fail paths unexercised |
-| `jobs/reminders.js` | 38% | reminder query/dispatch logic |
-| `jobs/email_worker.js` | 54% | worker failure handler |
-| `services/email.service.js` | 52% | queue enqueue/direct-send branches |
+| Area                        | Lines | Gap                                |
+| --------------------------- | ----- | ---------------------------------- |
+| `config/redis.js`           | 33%   | connect/fail paths unexercised     |
+| `jobs/reminders.js`         | 38%   | reminder query/dispatch logic      |
+| `jobs/email_worker.js`      | 54%   | worker failure handler             |
+| `services/email.service.js` | 52%   | queue enqueue/direct-send branches |
 
 The roadmap's Mailhog-in-CI item would close the email-service gap. Reminder logic is pure enough to unit-test with an in-memory Mongo run — good candidate alongside upcoming features.
 
@@ -146,15 +146,15 @@ The roadmap's Mailhog-in-CI item would close the email-service gap. Reminder log
 
 ## Prioritized Remediation Plan
 
-| # | Finding | When |
-| - | ------- | ---- |
-| 1 | FIND-001 rotate secrets + untrack `.env` + purge history | **Immediately, before repo goes public** (user action required for rotation) |
-| 2 | FIND-002 purpose-scoped JWTs | Lands naturally with 2FA challenge tokens (Phase 4); retrofit remaining issuers then |
-| 3 | FIND-008 TTL/cleanup for tokens | With Sessions/devices phase (Phase 3) |
-| 4 | FIND-005 stats-cache invalidation | Opportunistic during Bulk/trash phase (Phase 5) |
-| 5 | FIND-006 race-safe recurrence spawn | Opportunistic during Phase 5 |
-| 6 | FIND-007 pino in error handler | Trivial; bundle with any Phase touching middleware |
-| 7 | FIND-003 regex escape | Small standalone fix; candidate for a hardening commit |
-| 8 | FIND-009..014 | Backlog / documentation |
+| #   | Finding                                                  | When                                                                                 |
+| --- | -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 1   | FIND-001 rotate secrets + untrack `.env` + purge history | **Immediately, before repo goes public** (user action required for rotation)         |
+| 2   | FIND-002 purpose-scoped JWTs                             | Lands naturally with 2FA challenge tokens (Phase 4); retrofit remaining issuers then |
+| 3   | FIND-008 TTL/cleanup for tokens                          | With Sessions/devices phase (Phase 3)                                                |
+| 4   | FIND-005 stats-cache invalidation                        | Opportunistic during Bulk/trash phase (Phase 5)                                      |
+| 5   | FIND-006 race-safe recurrence spawn                      | Opportunistic during Phase 5                                                         |
+| 6   | FIND-007 pino in error handler                           | Trivial; bundle with any Phase touching middleware                                   |
+| 7   | FIND-003 regex escape                                    | Small standalone fix; candidate for a hardening commit                               |
+| 8   | FIND-009..014                                            | Backlog / documentation                                                              |
 
 > Per the agreed audit mode, nothing above is fixed retroactively in this pass — items marked "opportunistic" get folded in only when a feature phase touches the same files anyway.
