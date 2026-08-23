@@ -12,22 +12,32 @@ const hashToken = (token) =>
 const signAccessToken = (userId) =>
   jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: ACCESS_TTL });
 
-const issueRefreshToken = async (userId) => {
+const MAX_USER_AGENT_LENGTH = 256;
+
+const issueRefreshToken = async (userId, meta = {}) => {
   const token = crypto.randomBytes(48).toString("hex");
-  await Token.create({
+  const doc = await Token.create({
     user: userId,
     hash: hashToken(token),
     expiresAt: new Date(Date.now() + REFRESH_TTL * 1000),
+    ip: meta.ip || null,
+    userAgent: meta.userAgent
+      ? String(meta.userAgent).slice(0, MAX_USER_AGENT_LENGTH)
+      : null,
   });
-  return token;
+  return { token, sessionId: doc._id };
 };
 
-const issueTokenPair = async (userId) => ({
-  accessToken: signAccessToken(userId),
-  refreshToken: await issueRefreshToken(userId),
-  tokenType: "Bearer",
-  expiresIn: ACCESS_TTL,
-});
+const issueTokenPair = async (userId, meta = {}) => {
+  const { token, sessionId } = await issueRefreshToken(userId, meta);
+  return {
+    accessToken: signAccessToken(userId),
+    refreshToken: token,
+    sessionId,
+    tokenType: "Bearer",
+    expiresIn: ACCESS_TTL,
+  };
+};
 
 const refreshAccessToken = async (refreshToken) => {
   const tokenDoc = await Token.findOne({ hash: hashToken(refreshToken) });
@@ -54,10 +64,14 @@ const refreshAccessToken = async (refreshToken) => {
     throw Object.assign(new Error("User no longer exists"), { status: 401 });
   }
 
-  // Rotation: the presented token is revoked and a new pair is issued
+  // Rotation: the presented token is revoked and a new pair is issued —
+  // the replacement carries the same session metadata (same device)
   tokenDoc.revokedAt = new Date();
   await tokenDoc.save();
-  return issueTokenPair(user._id);
+  return issueTokenPair(user._id, {
+    ip: tokenDoc.ip,
+    userAgent: tokenDoc.userAgent,
+  });
 };
 
 const revokeRefreshToken = async (refreshToken) => {
@@ -74,10 +88,33 @@ const revokeAllUserTokens = async (userId) => {
   );
 };
 
+// Active session = issued, not revoked, and not expired yet
+const listUserSessions = async (userId) =>
+  Token.find({
+    user: userId,
+    revokedAt: null,
+    expiresAt: { $gt: new Date() },
+  })
+    .select("ip userAgent createdAt expiresAt")
+    .sort({ createdAt: -1 })
+    .lean();
+
+const revokeSessionById = async (userId, sessionId) => {
+  const result = await Token.updateOne(
+    { _id: sessionId, user: userId, revokedAt: null },
+    { $set: { revokedAt: new Date() } }
+  );
+  if (result.matchedCount === 0) {
+    throw Object.assign(new Error("Session not found"), { status: 404 });
+  }
+};
+
 module.exports = {
   issueTokenPair,
   refreshAccessToken,
   revokeRefreshToken,
   revokeAllUserTokens,
+  listUserSessions,
+  revokeSessionById,
   hashToken,
 };
