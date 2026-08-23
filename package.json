@@ -66,6 +66,10 @@
     "supertest": "^7.1.4"
   },
   "jest": {
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/client/"
+    ],
     "coverageThreshold": {
       "global": {
         "statements": 80,
