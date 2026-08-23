@@ -1,0 +1,14 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:5173",
+      "localStorage": [
+        {
+          "name": "taskapi.refresh",
+          "value": "eee48edc8f44631bf2c0e218e2c150e3dfe326a84254437d671b23e8f53566d4ccdf730a6192eb1299c687f7621b6431"
+        }
+      ]
+    }
+  ]
+}
