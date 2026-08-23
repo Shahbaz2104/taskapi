@@ -7,6 +7,7 @@ const {
   createTaskRules,
   updateTaskRules,
   idRule,
+  bulkTaskRules,
 } = require("../middleware/validate.js");
 
 router.use(protect);
@@ -14,7 +15,10 @@ router.use(protect);
 // Static routes must be registered before "/:id"
 router.get("/stats", tasksController.getStats);
 router.get("/export", tasksController.exportTasks);
+router.get("/trash", tasksController.listTrashedTasks);
 router.get("/all", authorize("admin"), tasksController.getAllTasksAdmin);
+router.patch("/bulk", bulkTaskRules, tasksController.bulkTasks);
+router.delete("/trash", tasksController.clearTrash);
 
 router.get("/", tasksController.getAllTasks);
 router.get("/:id", idRule, tasksController.getTaskById);

@@ -196,6 +196,26 @@ const challenge2faRules = [
   handleValidation,
 ];
 
+const BULK_ACTIONS = ["complete", "trash", "restore", "purge", "priority"];
+
+const bulkTaskRules = [
+  body("ids")
+    .isArray({ min: 1, max: 100 })
+    .withMessage("ids must be an array of 1–100 task IDs"),
+  body("ids.*").isMongoId().withMessage("Each id must be a valid task ID"),
+  body("action")
+    .isIn(BULK_ACTIONS)
+    .withMessage(`Action must be one of: ${BULK_ACTIONS.join(", ")}`),
+  body("priority")
+    .optional()
+    .isIn(["low", "medium", "high"])
+    .withMessage("Priority must be low, medium or high"),
+  body()
+    .custom((v) => v.action !== "priority" || Boolean(v.priority))
+    .withMessage("A priority is required when action is priority"),
+  handleValidation,
+];
+
 const roleRule = [
   ...userIdRule,
   body("role")
@@ -222,4 +242,5 @@ module.exports = {
   enable2faRules,
   disable2faRules,
   challenge2faRules,
+  bulkTaskRules,
 };

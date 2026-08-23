@@ -15,6 +15,7 @@ const checkReminders = async () => {
     dueDate: { $gte: now, $lte: horizon },
     status: { $ne: "completed" },
     reminderSent: false,
+    deletedAt: null, // never remind about trashed tasks
   })
     .populate("user")
     .lean();

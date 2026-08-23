@@ -20,6 +20,7 @@ const adminRoutes = require("./routes/admin_routes.js");
 const errorHandler = require("./middleware/error_handler.js");
 const { startEmailWorker } = require("./jobs/email_worker.js");
 const { startReminderJob } = require("./jobs/reminders.js");
+const { startTrashCleanupJob } = require("./jobs/trash_cleanup.js");
 
 dotenv.config();
 
@@ -113,6 +114,7 @@ if (require.main === module) {
     });
     startEmailWorker();
     startReminderJob();
+    startTrashCleanupJob();
   };
 
   const shutdown = async (signal) => {

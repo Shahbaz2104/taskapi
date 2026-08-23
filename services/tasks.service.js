@@ -13,7 +13,7 @@ const parseSort = (sort) => {
 };
 
 const listTasks = async ({ userId, page, limit, status, search, sort }) => {
-  const match = { user: userId };
+  const match = { user: userId, deletedAt: null };
   if (status && STATUSES.includes(status)) match.status = status;
   if (search) match.$text = { $search: search };
 
@@ -53,7 +53,7 @@ const listTasks = async ({ userId, page, limit, status, search, sort }) => {
 
 const getStats = async (userId) => {
   const [result] = await Task.aggregate([
-    { $match: { user: userId } },
+    { $match: { user: userId, deletedAt: null } },
     {
       $facet: {
         byStatus: [{ $group: { _id: "$status", count: { $sum: 1 } } }],
@@ -97,7 +97,7 @@ const csvEscape = (value) => {
 };
 
 const exportTasks = async ({ userId, status }) => {
-  const filter = { user: userId };
+  const filter = { user: userId, deletedAt: null };
   if (status && STATUSES.includes(status)) filter.status = status;
 
   const tasks = await Task.find(filter).sort({ createdAt: -1 }).lean();
@@ -135,37 +135,56 @@ const nextDueDate = (base, recurrence) => {
 };
 
 const updateTask = async ({ taskId, userId, updates }) => {
-  const existing = await Task.findOne({ _id: taskId, user: userId });
+  const existing = await Task.findOne({
+    _id: taskId,
+    user: userId,
+    deletedAt: null,
+  });
   if (!existing) return null;
 
-  // Completing a recurring task spawns the next occurrence
-  if (
-    updates.status === "completed" &&
-    existing.status !== "completed" &&
-    existing.recurrence
-  ) {
-    await Task.create({
-      title: existing.title,
-      description: existing.description,
-      status: "pending",
-      priority: existing.priority,
-      dueDate: nextDueDate(existing.dueDate || new Date(), existing.recurrence),
-      tags: existing.tags,
-      recurrence: existing.recurrence,
+  // Completing is a one-way transition guarded inside the update filter,
+  // so two concurrent completions cannot both win the spawn race
+  const completing = updates.status === "completed";
+  const updated = await Task.findOneAndUpdate(
+    {
+      _id: taskId,
       user: userId,
-    });
+      deletedAt: null,
+      ...(completing ? { status: { $ne: "completed" } } : {}),
+    },
+    updates,
+    { returnDocument: "after", runValidators: true }
+  );
+
+  if (!updated) {
+    // Lost the completion race (another request completed it first) —
+    // the task still exists, so surface its current state
+    return Task.findOne({ _id: taskId, user: userId, deletedAt: null });
   }
 
-  if (updates.status === "completed" && existing.status !== "completed") {
+  // Winner of a completion on a recurring task spawns the next occurrence
+  if (completing && existing.status !== "completed") {
+    if (existing.recurrence) {
+      await Task.create({
+        title: existing.title,
+        description: existing.description,
+        status: "pending",
+        priority: existing.priority,
+        dueDate: nextDueDate(
+          existing.dueDate || new Date(),
+          existing.recurrence
+        ),
+        tags: existing.tags,
+        recurrence: existing.recurrence,
+        user: userId,
+      });
+    }
     analytics.capture(userId, "task_completed", {
       recurring: !!existing.recurrence,
     });
   }
 
-  return Task.findOneAndUpdate({ _id: taskId, user: userId }, updates, {
-    returnDocument: "after",
-    runValidators: true,
-  });
+  return updated;
 };
 
 const createTask = async ({ userId, data, idempotencyKey }) => {
@@ -209,6 +228,64 @@ const createTask = async ({ userId, data, idempotencyKey }) => {
   return { task: await Task.create({ ...data, user: userId }) };
 };
 
+// --- Bulk operations & trash ---
+
+const BULK_ACTIONS = ["complete", "trash", "restore", "purge", "priority"];
+
+const softDeleteTasks = (userId, ids) =>
+  Task.updateMany(
+    { _id: { $in: ids }, user: userId, deletedAt: null },
+    { $set: { deletedAt: new Date() } }
+  );
+
+const restoreTasks = (userId, ids) =>
+  Task.updateMany(
+    { _id: { $in: ids }, user: userId, deletedAt: { $ne: null } },
+    { $set: { deletedAt: null } }
+  );
+
+const purgeTasks = (userId, ids) =>
+  Task.deleteMany({
+    _id: { $in: ids },
+    user: userId,
+    deletedAt: { $ne: null },
+  });
+
+const emptyTrash = (userId) =>
+  Task.deleteMany({ user: userId, deletedAt: { $ne: null } });
+
+// Bulk complete intentionally does NOT spawn recurring successors —
+// a 50-task selection must not silently create 50 follow-ups
+const bulkCompleteTasks = (userId, ids) =>
+  Task.updateMany(
+    {
+      _id: { $in: ids },
+      user: userId,
+      deletedAt: null,
+      status: { $ne: "completed" },
+    },
+    { $set: { status: "completed" } }
+  );
+
+const bulkSetPriority = (userId, ids, priority) =>
+  Task.updateMany(
+    { _id: { $in: ids }, user: userId, deletedAt: null },
+    { $set: { priority } }
+  );
+
+const listTrash = async ({ userId, page, limit }) => {
+  const filter = { user: userId, deletedAt: { $ne: null } };
+  const [tasks, total] = await Promise.all([
+    Task.find(filter)
+      .sort({ deletedAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Task.countDocuments(filter),
+  ]);
+  return { tasks, total, page, limit, totalPages: Math.ceil(total / limit) };
+};
+
 module.exports = {
   listTasks,
   getStats,
@@ -219,4 +296,12 @@ module.exports = {
   parseSort,
   STATUSES,
   SORT_FIELDS,
+  BULK_ACTIONS,
+  softDeleteTasks,
+  restoreTasks,
+  purgeTasks,
+  emptyTrash,
+  bulkCompleteTasks,
+  bulkSetPriority,
+  listTrash,
 };
