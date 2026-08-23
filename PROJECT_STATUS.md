@@ -1,122 +1,51 @@
-# 📊 TaskAPI — Project Status & Improvement Report
+# Project Status
 
-> **Date:** 2026-08-19 · **Last updated:** 2026-08-19 (A+B features + design hardening pass)
-> **Verdict:** ✅ Working. **83/83 tests pass** (65 integration + 6 boot + 12 unit), coverage gates enforced, `npm audit` clean.
+Last updated: 2026-08-23
 
----
+## Snapshot
 
-## 1. What This Project Is
+- **149 tests passing** across 11 suites; lint, Prettier and coverage gates green in CI (Node 20 & 22)
+- `npm audit`: 0 vulnerabilities at last run
 
-A production-grade **RESTful Task Management API** — Node.js + Express 5 + MongoDB (Mongoose 9)
+## What shipped (in commit order)
 
-- Redis. Full auth lifecycle (access + rotating refresh tokens, email verification, password
-  reset), rich task domain (priority, due dates, tags, recurrence, search, sort, stats, CSV
-  export), RBAC with admin user management, Redis-backed rate limiting, BullMQ email queue with
-  due-date reminders, idempotent writes, pino logging, Prometheus metrics, Swagger docs, Docker,
-  and a CI pipeline with coverage gates.
+| Phase | Commit    | Scope                                                                                                        |
+| ----- | --------- | ------------------------------------------------------------------------------------------------------------ |
+| 0     | `53cca9e` | Document-only security & quality audit → `AUDIT.md` (14 findings, severity-rated)                            |
+| 1+2   | `f0faf4b` | PostHog analytics via soft-fail capture seam + shared constants module                                       |
+| 3     | `eeba963` | Session/device management (IP + user-agent tracking, list/revoke)                                            |
+| 4     | `d89982a` | TOTP two-factor auth with QR provisioning + 8 single-use recovery codes                                      |
+| 5     | `01ad6f6` | Bulk operations + soft-delete trash with retention job; race-safe recurrence spawn; stats-cache invalidation |
+| —     | —         | Sentry error tracking + zod validation layer for new endpoints                                               |
+| 6     | `e2066b8` | CSV/JSON import (partial success, idempotent) + token-authenticated iCal feed                                |
+| 7     | `a9ccabb` | Signed webhooks with retries, circuit breaker, test ping                                                     |
+| 8     | `c1fcb0a` | Task sharing (viewer/editor), comments, append-only activity trail                                           |
 
----
+## Audit follow-ups
 
-## 2. Progress Phases
+Findings and remediation mapping live in `AUDIT.md`. Highlights:
 
-| Phase                                                        | Status               |
-| ------------------------------------------------------------ | -------------------- |
-| Initial scaffold + Express server                            | ✅ Done              |
-| MongoDB connection (Atlas)                                   | ✅ Done              |
-| Task CRUD + JWT auth + bcrypt                                | ✅ Done              |
-| Security middleware + validation                             | ✅ Done              |
-| RBAC admin route, pagination, filtering                      | ✅ Done              |
-| Graceful shutdown, `/health`, `/ready`                       | ✅ Done              |
-| Tier 1 portfolio pass (Swagger, Docker, CI, lint, hardening) | ✅ Done (2026-08-18) |
-| **A+B features + design hardening**                          | ✅ Done (2026-08-19) |
+- **FIND-001 (critical)**: real credentials were committed to git history at some point — **rotate the MongoDB Atlas password and `JWT_SECRET`** before exposing the repo publicly. Untracking `.env` / history scrubbing still pending.
+- FIND-002 (token-type confusion) mitigated by purpose-scoped 2FA challenge tokens.
+- FIND-005/FIND-006 fixed opportunistically during the trash phase (stats-cache invalidation; race-safe recurrence spawning).
+- Remaining low-severity items documented in `AUDIT.md`.
 
----
+## Deliberate design decisions
 
-## 3. What Was Built in the A+B + Design Pass (2026-08-19)
+- Audit was document-only: no retroactive rewrites outside feature scope.
+- Bulk complete intentionally does **not** spawn recurring successors.
+- Collaboration uses a single access chokepoint (`loadTaskWithAccess`); non-members get indistinguishable 404s. Delete/share-management stay owner-only.
+- Webhook enqueueing is best-effort: queue outages never fail product requests.
+- New endpoints validate with zod; legacy routes keep express-validator.
 
-### 🎯 Task domain
+## Known limitations
 
-- `priority` (low/medium/high), `dueDate`, `tags` (≤5), `in_progress` status, `recurrence`
-  (daily/weekly/monthly), `reminderSent` flag; text index + `{user, createdAt}` compound index
-- `GET /tasks` — full-text `search=`, `sort=` (incl. priority rank via `$switch` aggregation,
-  `$facet` returns data + total in one pass)
-- `GET /tasks/stats` — by status/priority, overdue, completion rate (Redis-cached 60s)
-- `GET /tasks/export` — hand-rolled CSV (no deps), escaping included
-- Recurrence: completing a recurring task spawns the next occurrence (idempotent on transition)
-- `Idempotency-Key` on `POST /tasks` — unique-index reservation before creation (race-safe)
+- Pagination is skip/limit (fine at personal scale; keyset pagination on roadmap).
+- Collaborator updates attribute recurrence spawning/analytics to the owner's account scope.
+- iCal feed exposes all live tasks of a user via a bearer-equivalent URL token — rotate it if leaked (`POST /me/calendar-feed/rotate`).
 
-### 🔐 Auth overhaul
+## Suggested next steps
 
-- `email` now required on registration (unique, lowercase); `emailVerified` flag
-- Access token 15m (JWT) + refresh token 7d (opaque, sha256-hashed in Mongo `Token` model)
-- `/auth/refresh` rotates tokens; **reuse detection** revokes all sessions (theft response)
-- `/auth/logout`, `/auth/verify-email`, `/auth/forgot-password` (generic response, rate-limited),
-  `/auth/reset-password` (revokes all sessions)
-
-### 📧 Email & jobs
-
-- `services/email.service.js` — Nodemailer; dev mode (no SMTP) logs + echoes verification URL
-- BullMQ queue + worker for emails; hourly repeatable reminder job (due ≤24h, `reminderSent`)
-- Tests keep working without Redis (soft-fail: memory stores + direct send / no-op)
-
-### 👤 Account & admin
-
-- `GET/PATCH /me`, `PUT /me/password` (revokes sessions), `DELETE /me` (cascades tasks+tokens)
-- `GET /admin/users` (pagination + search + role filter), `PATCH /admin/users/:id` (no self-demote),
-  `DELETE /admin/users/:id` (no self-delete, cascades)
-
-### 🏗 Design hardening
-
-- **Service layer** — business logic moved out of controllers (`services/tasks|auth|email`)
-- **`/api/v1`** prefix on all API routes
-- **Redis** — shared rate-limit store (soft-fallbacks to memory), stats cache, BullMQ broker
-- **Observability** — pino + pino-http (request IDs, auth-header redaction), gzip, `/metrics`
-  (prom-client)
-- **README System Design section** with architecture diagram + decision log
-
----
-
-## 4. Verified Working (2026-08-19)
-
-```
-Test Suites: 3 passed, 3 total
-Tests:       83 passed, 83 total
-```
-
-Coverage (local): statements 82%, branches 65%, functions 74%, lines 85% —
-thresholds set in `package.json` (80/60/70/82), enforced by CI.
-`npm audit` → 0 vulnerabilities. `npm run lint` + `format:check` → clean.
-
----
-
-## 5. Architecture (current)
-
-```
-taskapi/
- ├─ index.js               # Env check, helmet/cors/compression/pino, /api/v1, /metrics, workers
- ├─ config/                # db, redis (soft-fail), rate_limit (Redis store), logger (pino), swagger
- ├─ models/                # users, tasks, tokens (refresh), idempotency (TTL)
- ├─ services/              # tasks (list/stats/csv/recurrence), auth (rotation/revocation), email (queue)
- ├─ jobs/                  # email_worker (BullMQ), reminders (hourly repeatable)
- ├─ controllers/           # auth, tasks, user (/me), admin
- ├─ routes/                # auth (rate-limited), tasks (protected), user, admin (RBAC)
- ├─ middleware/            # protect (JWT), authorize (RBAC), validate, error_handler
- ├─ __tests__/             # 65 integration + 6 server boot + 12 unit
- └─ .github/workflows/ci.yml
-```
-
----
-
-## 6. Remaining / Optional Improvements (roadmap)
-
-1. **Cursor-based pagination** for deep pages (skip/limit documented as a tradeoff).
-2. **Collaboration** — shared/assigned tasks, comments, activity feed.
-3. **Frontend client** — small React app consuming the API.
-4. **Live deployment** — push to Render/Railway, add live URL + dynamic CI badge.
-5. **SMTP integration test** — with Mailhog in CI (email paths currently untested by design).
-6. **Docker verification** — `docker compose up` needs a local Docker run (not available on dev box).
-7. **Coverage badge** — connect Codecov or generate locally in CI.
-
----
-
-_Keep this report updated as the project evolves._
+1. Rotate leaked credentials (see AUDIT.md FIND-001) and untrack `.env`.
+2. Deploy behind a live URL; wire real PostHog/Sentry projects.
+3. Cursor pagination + frontend client (see README roadmap).
