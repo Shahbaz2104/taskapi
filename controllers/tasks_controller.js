@@ -5,6 +5,17 @@ const { isAvailable, getClient } = require("../config/redis");
 
 const STATS_CACHE_TTL = 60;
 
+// Keep /tasks/stats honest after mutations instead of serving up to 60s
+// of stale numbers (audit FIND-005)
+const invalidateStatsCache = async (userId) => {
+  if (!isAvailable()) return;
+  try {
+    await getClient().del(`stats:${userId}`);
+  } catch {
+    // cache invalidation is best-effort; never fail the request for it
+  }
+};
+
 /**
  * @swagger
  * /tasks:
@@ -191,6 +202,7 @@ const getTaskById = async (req, res) => {
   const task = await Task.findOne({
     _id: req.params.id,
     user: req.user.userId,
+    deletedAt: null,
   });
   if (!task) return res.status(404).json({ error: "Task not found" });
   res.status(200).json(task);
@@ -247,6 +259,7 @@ const createTask = async (req, res) => {
     hasDueDate: !!result.task.dueDate,
     recurring: !!result.task.recurrence,
   });
+  await invalidateStatsCache(req.user.userId);
   res.status(201).json(result.task);
 };
 
@@ -340,13 +353,150 @@ const updateTask = async (req, res) => {
  *         description: Task not found
  */
 const deleteTask = async (req, res) => {
-  const task = await Task.findOneAndDelete({
-    _id: req.params.id,
-    user: req.user.userId,
-  });
-  if (!task) return res.status(404).json({ error: "Task not found" });
-  analytics.capture(req.user.userId, "task_deleted");
+  // Soft delete — lands in /tasks/trash and is purged after retention
+  const result = await tasksService.softDeleteTasks(req.user.userId, [
+    req.params.id,
+  ]);
+  if (result.modifiedCount === 0) {
+    return res.status(404).json({ error: "Task not found" });
+  }
+  analytics.capture(req.user.userId, "task_trashed");
+  await invalidateStatsCache(req.user.userId);
   res.status(204).send();
+};
+
+/**
+ * @swagger
+ * /tasks/bulk:
+ *   patch:
+ *     summary: Apply one action to many of your live tasks
+ *     tags: [Tasks]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [ids, action]
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 minItems: 1
+ *                 maxItems: 100
+ *                 items: { type: string }
+ *               action:
+ *                 type: string
+ *                 enum: [complete, trash, restore, purge, priority]
+ *                 description: |
+ *                   complete: mark pending/in_progress tasks completed (no recurrence spawning).
+ *                   trash: soft-delete. restore: bring back from trash.
+ *                   purge: permanently delete trashed tasks. priority: set priority (required).
+ *               priority: { type: string, enum: [low, medium, high], description: Required when action=priority }
+ *     responses:
+ *       200:
+ *         description: Counts of tasks matched and modified
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 action: { type: string }
+ *                 matched: { type: integer }
+ *                 modified: { type: integer }
+ *       400:
+ *         description: Invalid ids, action, or missing priority
+ *       401:
+ *         description: Missing or invalid token
+ */
+const bulkTasks = async (req, res) => {
+  const { ids, action, priority } = req.body;
+
+  let result;
+  switch (action) {
+    case "complete":
+      result = await tasksService.bulkCompleteTasks(req.user.userId, ids);
+      break;
+    case "trash":
+      result = await tasksService.softDeleteTasks(req.user.userId, ids);
+      break;
+    case "restore":
+      result = await tasksService.restoreTasks(req.user.userId, ids);
+      break;
+    case "purge":
+      result = await tasksService.purgeTasks(req.user.userId, ids);
+      break;
+    case "priority":
+      result = await tasksService.bulkSetPriority(
+        req.user.userId,
+        ids,
+        priority
+      );
+      break;
+    default:
+      return res.status(400).json({ error: "Unsupported bulk action" });
+  }
+
+  const matched = result.matchedCount ?? result.deletedCount ?? 0;
+  const modified = result.modifiedCount ?? result.deletedCount ?? 0;
+  analytics.capture(req.user.userId, `bulk_${action}`, { count: modified });
+  if (action !== "purge") await invalidateStatsCache(req.user.userId);
+
+  res.status(200).json({ action, matched, modified });
+};
+
+/**
+ * @swagger
+ * /tasks/trash:
+ *   get:
+ *     summary: List your trashed tasks (newest deletion first)
+ *     tags: [Tasks]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+ *       - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 10 } }
+ *     responses:
+ *       200:
+ *         description: Paginated trashed tasks
+ *       401:
+ *         description: Missing or invalid token
+ */
+const listTrashedTasks = async (req, res) => {
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 100);
+  const result = await tasksService.listTrash({
+    userId: req.user.userId,
+    page,
+    limit,
+  });
+  res.status(200).json(result);
+};
+
+/**
+ * @swagger
+ * /tasks/trash:
+ *   delete:
+ *     summary: Permanently empty your trash
+ *     tags: [Tasks]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Number of tasks permanently deleted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 deleted: { type: integer }
+ *       401:
+ *         description: Missing or invalid token
+ */
+const clearTrash = async (req, res) => {
+  const result = await tasksService.emptyTrash(req.user.userId);
+  analytics.capture(req.user.userId, "trash_emptied", {
+    count: result.deletedCount,
+  });
+  res.status(200).json({ deleted: result.deletedCount });
 };
 
 module.exports = {
@@ -358,4 +508,7 @@ module.exports = {
   createTask,
   updateTask,
   deleteTask,
+  bulkTasks,
+  listTrashedTasks,
+  clearTrash,
 };

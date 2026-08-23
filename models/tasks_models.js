@@ -44,6 +44,12 @@ const taskSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Soft delete — set by DELETE /tasks/:id and bulk "trash"; purged
+    // permanently after the retention window (jobs/trash_cleanup.js)
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -56,6 +62,7 @@ const taskSchema = new mongoose.Schema(
 // Compound index: scoped reads (list by user, sorted by creation) are the
 // hot path — without it Mongo would COLLSCAN every request as data grows.
 taskSchema.index({ user: 1, createdAt: -1 });
+taskSchema.index({ user: 1, deletedAt: -1 });
 
 // Text index powers ?search= across title and description
 taskSchema.index({ title: "text", description: "text" });
