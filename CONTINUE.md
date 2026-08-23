@@ -71,7 +71,26 @@ clean, prettier via root.
   task.completed, task.trashed, test.ping)
 - Password change endpoint? check `/me/password` existence in user_routes
 
-### P7 ship
+### P7 ship — IN PROGRESS (WIP `0f941a2`, resume here first)
+
+- E2E infra DONE & working: @playwright/test + chromium; config runs TWO
+  webServers — scripts/e2e-api.mjs (mongodb-memory-server PINNED to
+  MONGOMS_VERSION 7.0.14; cached 8.2.1 binary SIGSEGVs in this sandbox)
+  spawning the real API on :3000, plus next dev on :5173.
+- auth.setup.ts project registers fresh user → storageState at
+  e2e/.auth/user.json (gitignored). smoke.spec.ts: create→complete→
+  trash→undo→restore→settings→signout.
+- STATUS: setup+test1 pass; test2 fails finding checkbox
+  Complete "Launch the falcon". NEAR-CERTAIN CAUSE: serial tests each get
+  a NEW page at about:blank and only test1 navigates. FIX: add
+  await page.goto("/dashboard") at top of tests 2–7, rerun npx playwright
+  test, expect green or small selector nudges after.
+- Proven gotcha: router.replace from freshly-swapped success panel can
+  lose pointer race in dev → spec uses dispatchEvent("click") there.
+- After e2e green: ci.yml client job (lint/test/build only), DEPLOY.md,
+  README web-client section + GIFs, PROJECT_STATUS refresh.
+
+### P7 ship (original notes)
 
 - Route-level splitting audit (three.js already isolated), bundle analyze
 - Lighthouse ≥90 perf on landing
