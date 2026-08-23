@@ -67,6 +67,27 @@ export async function api<T>(
   return handleResponse<T>(res);
 }
 
+/** Same auth semantics as api(), but returns the raw body as text (CSV). */
+export async function apiText(path: string): Promise<string> {
+  let res = await rawRequest(path, {});
+  if (res.status === 401 && getRefreshToken()) {
+    const token = await silentRefresh();
+    if (!token) throw new ApiError(401, "Session expired");
+    res = await rawRequest(path, {});
+  }
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const data = await res.json();
+      if (typeof data?.error === "string") message = data.error;
+    } catch {
+      /* keep fallback */
+    }
+    throw new ApiError(res.status, message);
+  }
+  return res.text();
+}
+
 async function rawRequest(
   path: string,
   { method = "GET", body, signal }: ApiOptions

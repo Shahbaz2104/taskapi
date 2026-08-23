@@ -1,4 +1,4 @@
-import { api } from "@/lib/api";
+import { api, apiText } from "@/lib/api";
 
 export type TaskStatus = "pending" | "in_progress" | "completed";
 export type TaskPriority = "low" | "medium" | "high";
@@ -15,6 +15,8 @@ export interface Task {
   recurrence?: Recurrence | null;
   createdAt: string;
   updatedAt: string;
+  /** Present only for trashed tasks. */
+  deletedAt?: string;
 }
 
 export interface TasksPage {
@@ -80,4 +82,42 @@ export function updateTask(id: string, patch: Partial<TaskInput>) {
 /** Soft-deletes into the trash (restorable until retention purge). */
 export function deleteTask(id: string) {
   return api<{ message?: string }>(`/tasks/${id}`, { method: "DELETE" });
+}
+
+/* ── Trash ────────────────────────────────────────────────── */
+
+export function listTrash(filters: TaskFilters) {
+  return api<TasksPage>(`/tasks/trash${buildParams(filters)}`);
+}
+
+export type BulkAction = "complete" | "trash" | "restore" | "purge";
+
+export function bulkAction(ids: string[], action: BulkAction) {
+  return api<{ modified: number; matched: number }>(`/tasks/bulk`, {
+    method: "PATCH",
+    body: { ids, action },
+  });
+}
+
+export function emptyTrash() {
+  return api<{ deleted: number }>(`/tasks/trash`, { method: "DELETE" });
+}
+
+/* ── Stats & export ───────────────────────────────────────── */
+
+export interface TaskStats {
+  total: number;
+  byStatus: Record<TaskStatus, number>;
+  byPriority: Record<TaskPriority, number>;
+  overdue: number;
+}
+
+export function getStats() {
+  return api<TaskStats>(`/tasks/stats`);
+}
+
+/** Server-rendered CSV of all live tasks (respects optional status). */
+export function exportTasksCsv(status?: TaskStatus): Promise<string> {
+  const qs = status ? `?status=${status}` : "";
+  return apiText(`/tasks/export${qs}`);
 }

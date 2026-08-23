@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -51,7 +51,8 @@ const taskSchema = z.object({
     .refine((tags) => tags.length <= 5, "At most 5 tags"),
 });
 
-type TaskForm = z.input<typeof taskSchema>;
+type TaskFormIn = z.input<typeof taskSchema>;
+type TaskFormOut = z.output<typeof taskSchema>;
 
 export function TaskDialog({
   open,
@@ -67,7 +68,6 @@ export function TaskDialog({
   onSubmit(input: TaskInput): void;
   pending?: boolean;
 }) {
-  const [tagText, setTagText] = useState("");
   const {
     register,
     handleSubmit,
@@ -75,9 +75,9 @@ export function TaskDialog({
     setValue,
     watch,
     formState: { errors },
-  } = useForm<TaskForm>({
+  } = useForm({
     resolver: zodResolver(taskSchema),
-    defaultValues: defaults(null),
+    defaultValues: defaults(null) as TaskFormIn,
   });
 
   const status = watch("status");
@@ -85,19 +85,21 @@ export function TaskDialog({
 
   useEffect(() => {
     if (open) {
-      reset(defaults(task));
-      setTagText(task?.tags?.join(", ") ?? "");
+      reset({
+        ...defaults(task),
+        tags: task?.tags?.join(", ") ?? "",
+      });
     }
   }, [open, task, reset]);
 
-  function submit(values: TaskForm) {
+  function submit(values: TaskFormOut) {
     onSubmit({
       title: values.title.trim(),
       description: values.description?.trim() || undefined,
-      status: values.status as TaskStatus,
-      priority: values.priority as TaskPriority,
+      status: values.status,
+      priority: values.priority,
       dueDate: values.dueDate || undefined,
-      tags: (values.tags as unknown as string[]) || [],
+      tags: values.tags ?? [],
     });
     onOpenChange(false);
   }
@@ -179,12 +181,10 @@ export function TaskDialog({
               <Input id="dueDate" type="date" {...register("dueDate")} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="tags">Tags (≤5)</Label>
+              <Label htmlFor="tags">Tags (≤5, comma-separated)</Label>
               <Input
                 id="tags"
                 placeholder="ops, launch"
-                value={tagText}
-                onChange={(e) => setTagText(e.target.value)}
                 {...register("tags")}
               />
               <FieldError>{errors.tags?.message}</FieldError>
@@ -205,7 +205,7 @@ export function TaskDialog({
   );
 }
 
-function defaults(task: Task | null): TaskForm {
+function defaults(task: Task | null): TaskFormIn {
   return {
     title: task?.title ?? "",
     description: task?.description ?? "",
