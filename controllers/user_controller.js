@@ -351,6 +351,60 @@ const disable2fa = async (req, res) => {
   res.status(200).json({ message: "2FA disabled — please log in again" });
 };
 
+// --- iCal calendar feed management ---
+
+const buildFeedUrl = (req, token) => {
+  const base =
+    process.env.CLIENT_BASE_URL || `${req.protocol}://${req.get("host")}`;
+  return `${base}/api/v1/tasks/calendar.ics?token=${token}`;
+};
+
+/**
+ * @swagger
+ * /me/calendar-feed:
+ *   get:
+ *     summary: Get your iCal feed URL (token is provisioned on first view)
+ *     tags: [Account]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Feed token and ready-to-subscribe URL
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token: { type: string }
+ *                 url: { type: string, example: "https://api.example.com/api/v1/tasks/calendar.ics?token=..." }
+ */
+const getCalendarFeedSettings = async (req, res) => {
+  const feedToken = await authService.getOrCreateFeedToken(req.user.userId);
+  res.status(200).json({ token: feedToken, url: buildFeedUrl(req, feedToken) });
+};
+
+/**
+ * @swagger
+ * /me/calendar-feed/rotate:
+ *   post:
+ *     summary: Regenerate your iCal feed token (old URL stops working)
+ *     tags: [Account]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: New feed token and URL
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token: { type: string }
+ *                 url: { type: string }
+ */
+const rotateCalendarFeedToken = async (req, res) => {
+  const feedToken = await authService.rotateFeedToken(req.user.userId);
+  res.status(200).json({ token: feedToken, url: buildFeedUrl(req, feedToken) });
+};
+
 module.exports = {
   getMe,
   updateMe,
@@ -361,4 +415,6 @@ module.exports = {
   setup2fa,
   enable2fa,
   disable2fa,
+  getCalendarFeedSettings,
+  rotateCalendarFeedToken,
 };

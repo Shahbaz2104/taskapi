@@ -286,6 +286,272 @@ const listTrash = async ({ userId, page, limit }) => {
   return { tasks, total, page, limit, totalPages: Math.ceil(total / limit) };
 };
 
+// --- Import (JSON / CSV) ---
+
+const MAX_IMPORT_ROWS = 500;
+const PRIORITIES = ["low", "medium", "high"];
+const RECURRENCES = ["daily", "weekly", "monthly"];
+
+// RFC 4180-style parser: quoted fields, "" escapes, embedded newlines,
+// CRLF or LF records. Returns an array of raw field arrays.
+const parseCsvText = (text) => {
+  const src = String(text).replace(/^\uFEFF/, ""); // strip BOM
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(field);
+      field = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && src[i + 1] === "\n") i++;
+      row.push(field);
+      field = "";
+      if (row.length > 1 || row[0].trim() !== "") rows.push(row);
+      row = [];
+    } else {
+      field += ch;
+    }
+  }
+  if (field !== "" || row.length > 0) {
+    row.push(field);
+    if (row.length > 1 || row[0].trim() !== "") rows.push(row);
+  }
+  return rows;
+};
+
+const CSV_HEADER_ALIASES = {
+  title: "title",
+  name: "title",
+  description: "description",
+  desc: "description",
+  status: "status",
+  priority: "priority",
+  duedate: "dueDate",
+  due_date: "dueDate",
+  due: "dueDate",
+  tags: "tags",
+  labels: "tags",
+};
+
+// Maps parsed CSV rows onto task-shaped objects using the header row
+const csvRowsToObjects = (rows) => {
+  const [header, ...dataRows] = rows;
+  const keys = header.map((h) => CSV_HEADER_ALIASES[h.trim().toLowerCase()]);
+  return dataRows.map((fields) => {
+    const obj = {};
+    keys.forEach((key, i) => {
+      if (key && fields[i] !== undefined && String(fields[i]).trim() !== "") {
+        obj[key] = fields[i].trim();
+      }
+    });
+    return obj;
+  });
+};
+
+// Validates one imported row → { doc } or { error }; mirrors the Task
+// model constraints (title ≤200, description ≤2000, ≤5 tags)
+const normalizeImportRow = (raw) => {
+  const title = typeof raw.title === "string" ? raw.title.trim() : "";
+  if (!title) return { error: "title is required" };
+  if (title.length > 200) return { error: "title exceeds 200 characters" };
+
+  const doc = { title };
+
+  const description =
+    raw.description == null ? "" : String(raw.description).trim();
+  if (description.length > 2000) {
+    return { error: "description exceeds 2000 characters" };
+  }
+  if (description) doc.description = description;
+
+  if (raw.status != null && raw.status !== "") {
+    if (!STATUSES.includes(raw.status))
+      return { error: `invalid status "${raw.status}"` };
+    doc.status = raw.status;
+  }
+
+  if (raw.priority != null && raw.priority !== "") {
+    if (!PRIORITIES.includes(raw.priority)) {
+      return { error: `invalid priority "${raw.priority}"` };
+    }
+    doc.priority = raw.priority;
+  }
+
+  if (raw.dueDate != null && raw.dueDate !== "") {
+    const d = new Date(raw.dueDate);
+    if (Number.isNaN(d.getTime())) {
+      return { error: `invalid dueDate "${raw.dueDate}"` };
+    }
+    doc.dueDate = d;
+  }
+
+  if (raw.recurrence != null && raw.recurrence !== "") {
+    if (!RECURRENCES.includes(raw.recurrence)) {
+      return { error: `invalid recurrence "${raw.recurrence}"` };
+    }
+    doc.recurrence = raw.recurrence;
+  }
+
+  let tags = raw.tags;
+  if (typeof tags === "string") {
+    tags = tags.split(/[;,]/);
+  }
+  if (tags != null && !Array.isArray(tags)) {
+    return { error: "tags must be an array or semicolon-delimited string" };
+  }
+  if (Array.isArray(tags)) {
+    const clean = [
+      ...new Set(tags.map((t) => String(t).trim()).filter(Boolean)),
+    ];
+    if (clean.length > 5) return { error: "at most 5 tags per task" };
+    if (clean.length > 0) doc.tags = clean;
+  }
+
+  return { doc };
+};
+
+// Bulk import with per-row partial success. Reuses the Mongo Idempotency
+// collection (same contract as createTask): a repeated Idempotency-Key
+// replays the original { imported, failed } response.
+const importTasks = async ({ userId, rows, idempotencyKey }) => {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw Object.assign(new Error("No importable rows provided"), {
+      status: 400,
+    });
+  }
+  if (rows.length > MAX_IMPORT_ROWS) {
+    throw Object.assign(
+      new Error(`Import limited to ${MAX_IMPORT_ROWS} rows per request`),
+      { status: 400 }
+    );
+  }
+
+  let record = null;
+  if (idempotencyKey) {
+    try {
+      record = await Idempotency.create({
+        user: userId,
+        key: idempotencyKey,
+        statusCode: 200,
+        body: null,
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        const existing = await Idempotency.findOne({
+          user: userId,
+          key: idempotencyKey,
+        });
+        if (existing && existing.body) {
+          return { ...existing.body, replay: true };
+        }
+        throw Object.assign(new Error("Idempotent request in progress"), {
+          status: 409,
+        });
+      }
+      throw err;
+    }
+  }
+
+  const docs = [];
+  const failed = [];
+  rows.forEach((raw, index) => {
+    const outcome = normalizeImportRow(raw || {});
+    if (outcome.error) failed.push({ row: index, error: outcome.error });
+    else docs.push({ ...outcome.doc, user: userId });
+  });
+
+  const inserted = docs.length > 0 ? await Task.insertMany(docs) : [];
+  const result = { imported: inserted.length, failed };
+
+  if (record) {
+    record.body = result;
+    await record.save();
+  }
+  return result;
+};
+
+// --- iCal calendar feed (RFC 5545) ---
+
+const formatICalDate = (date) =>
+  new Date(date)
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "");
+
+// Escape text values per RFC 5545 §3.3.11
+const icalEscape = (value) =>
+  String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,")
+    .replace(/\r?\n/g, "\\n");
+
+// Fold content lines longer than 75 octets (RFC 5545 §3.1)
+const foldICalLine = (line) => {
+  if (line.length <= 75) return line;
+  const parts = [line.slice(0, 75)];
+  for (let i = 75; i < line.length; i += 74) {
+    parts.push(` ${line.slice(i, i + 74)}`);
+  }
+  return parts.join("\r\n");
+};
+
+const buildICalFeed = async (userId) => {
+  const tasks = await Task.find({ user: userId, deletedAt: null })
+    .sort({ dueDate: 1, createdAt: -1 })
+    .lean();
+
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//TaskAPI//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+  ];
+
+  for (const t of tasks) {
+    // Tasks without a due date anchor at creation time so they still
+    // appear on the calendar
+    const start = t.dueDate ? new Date(t.dueDate) : new Date(t.createdAt);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${t._id}@taskapi`,
+      `DTSTAMP:${formatICalDate(new Date())}`,
+      `DTSTART:${formatICalDate(start)}`,
+      `DTEND:${formatICalDate(end)}`,
+      `SUMMARY:${icalEscape(t.title)}`
+    );
+    if (t.description) {
+      lines.push(`DESCRIPTION:${icalEscape(t.description)}`);
+    }
+    lines.push(
+      `STATUS:${t.status === "completed" ? "CANCELLED" : "CONFIRMED"}`,
+      "END:VEVENT"
+    );
+  }
+
+  lines.push("END:VCALENDAR");
+  return lines.map(foldICalLine).join("\r\n") + "\r\n";
+};
+
 module.exports = {
   listTasks,
   getStats,
@@ -304,4 +570,13 @@ module.exports = {
   bulkCompleteTasks,
   bulkSetPriority,
   listTrash,
+  MAX_IMPORT_ROWS,
+  parseCsvText,
+  csvRowsToObjects,
+  normalizeImportRow,
+  importTasks,
+  formatICalDate,
+  icalEscape,
+  foldICalLine,
+  buildICalFeed,
 };

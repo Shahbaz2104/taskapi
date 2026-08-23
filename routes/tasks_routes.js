@@ -10,6 +10,11 @@ const {
   bulkTaskRules,
 } = require("../middleware/validate.js");
 
+// Public iCal feed — authenticated by per-user feed token in the query
+// string (calendar clients can't send Authorization headers), so it is
+// registered before router.use(protect)
+router.get("/calendar.ics", tasksController.getCalendarFeed);
+
 router.use(protect);
 
 // Static routes must be registered before "/:id"
@@ -19,6 +24,11 @@ router.get("/trash", tasksController.listTrashedTasks);
 router.get("/all", authorize("admin"), tasksController.getAllTasksAdmin);
 router.patch("/bulk", bulkTaskRules, tasksController.bulkTasks);
 router.delete("/trash", tasksController.clearTrash);
+router.post(
+  "/import",
+  express.text({ type: "text/csv", limit: "2mb" }),
+  tasksController.importTasks
+);
 
 router.get("/", tasksController.getAllTasks);
 router.get("/:id", idRule, tasksController.getTaskById);

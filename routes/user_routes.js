@@ -25,6 +25,9 @@ router.delete(
   sessionIdRule,
   userController.revokeSession
 );
+// iCal calendar feed management
+router.get("/calendar-feed", userController.getCalendarFeedSettings);
+router.post("/calendar-feed/rotate", userController.rotateCalendarFeedToken);
 router.delete("/", userController.deleteMe);
 
 module.exports = router;
