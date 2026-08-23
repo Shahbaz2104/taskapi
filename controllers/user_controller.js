@@ -135,4 +135,68 @@ const deleteMe = async (req, res) => {
   res.status(204).send();
 };
 
-module.exports = { getMe, updateMe, changePassword, deleteMe };
+/**
+ * @swagger
+ * /me/sessions:
+ *   get:
+ *     summary: List your active sessions (devices with a live refresh token)
+ *     tags: [Account]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Active sessions, newest first
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 sessions:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: string }
+ *                       ip: { type: string, nullable: true }
+ *                       userAgent: { type: string, nullable: true }
+ *                       createdAt: { type: string, format: date-time }
+ *                       expiresAt: { type: string, format: date-time }
+ *       401:
+ *         description: Missing or invalid token
+ */
+const listSessions = async (req, res) => {
+  const sessions = await authService.listUserSessions(req.user.userId);
+  res.status(200).json({ sessions });
+};
+
+/**
+ * @swagger
+ * /me/sessions/{sessionId}:
+ *   delete:
+ *     summary: Revoke one of your sessions (log out that device)
+ *     tags: [Account]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { name: sessionId, in: path, required: true, schema: { type: string }, description: Session ID (from the token pair response or the sessions list) }
+ *     responses:
+ *       204:
+ *         description: Session revoked
+ *       400:
+ *         description: Invalid session ID
+ *       401:
+ *         description: Missing or invalid token
+ *       404:
+ *         description: Session not found (already revoked, expired, or not yours)
+ */
+const revokeSession = async (req, res) => {
+  await authService.revokeSessionById(req.user.userId, req.params.sessionId);
+  res.status(204).send();
+};
+
+module.exports = {
+  getMe,
+  updateMe,
+  changePassword,
+  deleteMe,
+  listSessions,
+  revokeSession,
+};

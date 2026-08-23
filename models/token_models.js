@@ -24,6 +24,14 @@ const tokenSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    ip: {
+      type: String,
+      default: null,
+    },
+    userAgent: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );

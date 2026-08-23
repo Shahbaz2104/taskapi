@@ -56,7 +56,10 @@ const register = async (req, res) => {
   try {
     const user = await User.create({ username, email, password });
 
-    const pair = await authService.issueTokenPair(user._id);
+    const pair = await authService.issueTokenPair(user._id, {
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
 
     // Send verification email; in dev without SMTP the link is echoed back
     let verificationUrl;
@@ -129,7 +132,12 @@ const login = async (req, res) => {
   }
 
   analytics.capture(user._id, "user_logged_in");
-  res.status(200).json(await authService.issueTokenPair(user._id));
+  res.status(200).json(
+    await authService.issueTokenPair(user._id, {
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    })
+  );
 };
 
 /**

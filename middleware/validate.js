@@ -153,15 +153,14 @@ const updateTaskRules = [
   handleValidation,
 ];
 
-const idRule = [
-  param("id").isMongoId().withMessage("Invalid task ID"),
+const mongoIdParamRule = (field, message) => [
+  param(field).isMongoId().withMessage(message),
   handleValidation,
 ];
 
-const userIdRule = [
-  param("id").isMongoId().withMessage("Invalid user ID"),
-  handleValidation,
-];
+const idRule = mongoIdParamRule("id", "Invalid task ID");
+const userIdRule = mongoIdParamRule("id", "Invalid user ID");
+const sessionIdRule = mongoIdParamRule("sessionId", "Invalid session ID");
 
 const roleRule = [
   ...userIdRule,
@@ -184,5 +183,6 @@ module.exports = {
   updateTaskRules,
   idRule,
   userIdRule,
+  sessionIdRule,
   roleRule,
 };
