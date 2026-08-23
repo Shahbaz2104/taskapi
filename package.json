@@ -29,6 +29,7 @@
   },
   "type": "commonjs",
   "dependencies": {
+    "@sentry/node": "^10.70.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^6.1.2",
     "compression": "^1.8.1",
@@ -50,7 +51,8 @@
     "qrcode": "^1.5.4",
     "rate-limit-redis": "^6.0.1",
     "swagger-jsdoc": "^6.3.0",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
