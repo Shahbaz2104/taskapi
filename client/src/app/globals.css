@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Mission Control palette ─────────────────────────── */
+  --color-base: #0a0e14;
+  --color-surface: #10151e;
+  --color-surface-2: #151c28;
+  --color-surface-3: #1b2432;
+  --color-line: #232d3d;
+
+  --color-ink: #edf1f7;
+  --color-ink-2: rgba(237, 241, 247, 0.66);
+  --color-ink-3: rgba(237, 241, 247, 0.44);
+
+  --color-amber-glow: #f5a623;
+  --color-amber-bright: #ffb84d;
+  --color-amber-dim: #8f6216;
+
+  --color-ok: #3ecf8e;
+  --color-warn: #e5b567;
+  --color-danger: #f0647a;
+  --color-info: #6ca9ff;
+
+  /* ── Type ────────────────────────────────────────────── */
+  --font-display: "Clash Display", "Instrument Sans", system-ui, sans-serif;
+  --font-sans: "Instrument Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* ── Radii ───────────────────────────────────────────── */
+  --radius-card: 14px;
+  --radius-field: 10px;
+
+  /* ── Motion (Emil Kowalski discipline) ───────────────── */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-base font-sans text-ink antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(245, 166, 35, 0.28);
+}
+
+/* Focus is never sacrificed for style */
+:focus-visible {
+  outline: 2px solid var(--color-amber-glow);
+  outline-offset: 2px;
+}
+
+/* Reduced motion: fewer and gentler, not zero */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Scrollbar tuned to the deck */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
