@@ -1,13 +1,16 @@
 const express = require("express");
 const router = express.Router();
 const userController = require("../controllers/user_controller.js");
+const webhooksController = require("../controllers/webhooks_controller.js");
 const { protect } = require("../middleware/auth_middleware.js");
+const { zodValidate } = require("../middleware/zod_validate.js");
 const {
   changePasswordRules,
   updateMeRules,
   sessionIdRule,
   enable2faRules,
   disable2faRules,
+  idRule,
 } = require("../middleware/validate.js");
 
 router.use(protect);
@@ -28,6 +31,21 @@ router.delete(
 // iCal calendar feed management
 router.get("/calendar-feed", userController.getCalendarFeedSettings);
 router.post("/calendar-feed/rotate", userController.rotateCalendarFeedToken);
+// Webhook endpoint management
+router.get("/webhooks", webhooksController.listWebhooks);
+router.post(
+  "/webhooks",
+  zodValidate(webhooksController.createWebhookSchema),
+  webhooksController.createWebhook
+);
+router.patch(
+  "/webhooks/:id",
+  idRule,
+  zodValidate(webhooksController.updateWebhookSchema),
+  webhooksController.updateWebhook
+);
+router.delete("/webhooks/:id", idRule, webhooksController.deleteWebhook);
+router.post("/webhooks/:id/ping", idRule, webhooksController.pingWebhook);
 router.delete("/", userController.deleteMe);
 
 module.exports = router;

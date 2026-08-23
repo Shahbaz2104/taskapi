@@ -1,6 +1,7 @@
 const Task = require("../models/tasks_models.js");
 const Idempotency = require("../models/idempotency_models.js");
 const analytics = require("./analytics.service.js");
+const webhooks = require("./webhooks.service.js");
 
 const STATUSES = ["pending", "in_progress", "completed"];
 const SORT_FIELDS = ["createdAt", "updatedAt", "dueDate", "priority"];
@@ -182,6 +183,7 @@ const updateTask = async ({ taskId, userId, updates }) => {
     analytics.capture(userId, "task_completed", {
       recurring: !!existing.recurrence,
     });
+    webhooks.emitTaskEvent(userId, "task.completed", updated);
   }
 
   return updated;
