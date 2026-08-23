@@ -1,6 +1,7 @@
 const Task = require("../models/tasks_models.js");
 const tasksService = require("../services/tasks.service.js");
 const authService = require("../services/auth.service.js");
+const webhooks = require("../services/webhooks.service.js");
 const analytics = require("../services/analytics.service.js");
 const { isAvailable, getClient } = require("../config/redis");
 
@@ -260,6 +261,7 @@ const createTask = async (req, res) => {
     hasDueDate: !!result.task.dueDate,
     recurring: !!result.task.recurrence,
   });
+  webhooks.emitTaskEvent(req.user.userId, "task.created", result.task);
   await invalidateStatsCache(req.user.userId);
   res.status(201).json(result.task);
 };
@@ -355,6 +357,11 @@ const updateTask = async (req, res) => {
  */
 const deleteTask = async (req, res) => {
   // Soft delete — lands in /tasks/trash and is purged after retention
+  const existing = await Task.findOne({
+    _id: req.params.id,
+    user: req.user.userId,
+    deletedAt: null,
+  });
   const result = await tasksService.softDeleteTasks(req.user.userId, [
     req.params.id,
   ]);
@@ -362,6 +369,7 @@ const deleteTask = async (req, res) => {
     return res.status(404).json({ error: "Task not found" });
   }
   analytics.capture(req.user.userId, "task_trashed");
+  webhooks.emitTaskEvent(req.user.userId, "task.trashed", existing);
   await invalidateStatsCache(req.user.userId);
   res.status(204).send();
 };

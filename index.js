@@ -26,6 +26,7 @@ const errorHandler = require("./middleware/error_handler.js");
 const { startEmailWorker } = require("./jobs/email_worker.js");
 const { startReminderJob } = require("./jobs/reminders.js");
 const { startTrashCleanupJob } = require("./jobs/trash_cleanup.js");
+const { startWebhooksWorker } = require("./jobs/webhooks_worker.js");
 
 dotenv.config();
 
@@ -125,6 +126,7 @@ if (require.main === module) {
     startEmailWorker();
     startReminderJob();
     startTrashCleanupJob();
+    startWebhooksWorker();
   };
 
   const shutdown = async (signal) => {
