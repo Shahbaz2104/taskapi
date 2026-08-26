@@ -5,6 +5,7 @@ import compression from "compression";
 import pinoHttp from "pino-http";
 import promClient from "prom-client";
 import crypto from "node:crypto";
+import swaggerUi from "swagger-ui-express";
 import logger from "./config/logger.js";
 import { buildLimiter } from "./config/rate_limit.js";
 import { initSentry, attachSentryErrorHandler } from "./config/sentry.js";
@@ -61,9 +62,7 @@ export const createApp = (): Express => {
   app.use("/api/v1/auth", authRoutes);
   app.use("/api/v1/me", userRoutes);
   app.use("/api/v1/admin", adminRoutes);
-  app.use("/api-docs", (_req, res) => {
-    res.json(swaggerSpec);
-  });
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
   app.get("/health", (_req, res) => {
     res.status(200).json({

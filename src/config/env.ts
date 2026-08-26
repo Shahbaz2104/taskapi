@@ -26,6 +26,36 @@ const envSchema = z.object({
   SMTP_FROM: z.string().optional(),
 });
 
-export const env = envSchema.parse(process.env);
+const parsed = envSchema.parse(process.env);
 
 export type Env = z.infer<typeof envSchema>;
+
+const STRING_KEYS = new Set([
+  "NODE_ENV",
+  "MONGO_URI",
+  "JWT_SECRET",
+  "REDIS_URL",
+  "CORS_ORIGIN",
+  "CLIENT_BASE_URL",
+  "LOG_LEVEL",
+  "POSTHOG_API_KEY",
+  "POSTHOG_HOST",
+  "SENTRY_DSN",
+  "SMTP_HOST",
+  "SMTP_USER",
+  "SMTP_PASS",
+  "SMTP_FROM",
+]);
+
+// Live view: string keys re-read process.env so runtime changes (and
+// test harnesses) behave exactly like the legacy lazy reads, while
+// numeric coercion and documented defaults still come from the schema.
+export const env: Env = new Proxy(parsed, {
+  get(target, prop) {
+    if (typeof prop === "string" && STRING_KEYS.has(prop)) {
+      const live = process.env[prop];
+      if (live !== undefined) return live;
+    }
+    return target[prop as keyof Env];
+  },
+});
