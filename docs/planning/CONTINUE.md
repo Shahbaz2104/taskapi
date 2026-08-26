@@ -1,5 +1,8 @@
 # CONTINUE.md — where we left off
 
+> Backend API migrated to TypeScript/ESM/Vitest — status & next steps:
+> **docs/planning/PLAN.md** (Steps 1–4 + cutover DONE; only ship-prep remains).
+
 _Last updated: 2026-08-23 (end of Phase 4 session)_
 _Read this first next session. Update it at the end of every phase._
 
