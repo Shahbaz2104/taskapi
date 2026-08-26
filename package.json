@@ -2,12 +2,13 @@
   "name": "taskapi",
   "version": "1.1.0",
   "description": "RESTful Task Management API with JWT authentication, role-based access control, and pagination, built with Node.js, Express, and MongoDB.",
-  "main": "index.js",
+  "main": "dist/server.js",
   "scripts": {
-    "test": "jest --detectOpenHandles",
-    "test:watch": "jest --watch",
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -28,7 +29,7 @@
   "engines": {
     "node": ">=20.19.0"
   },
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
     "@sentry/node": "^10.70.0",
     "bcryptjs": "^3.0.3",
@@ -38,7 +39,6 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.1",
-    "express-validator": "^7.3.2",
     "helmet": "^8.3.0",
     "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
@@ -71,29 +71,12 @@
     "eslint": "^10.8.1",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.11.0",
-    "jest": "^30.2.0",
     "mongodb-memory-server": "^11.0.1",
-    "nodemon": "^3.1.11",
     "prettier": "^3.9.6",
     "supertest": "^7.1.4",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.68.0",
     "vitest": "^4.1.11"
-  },
-  "jest": {
-    "testPathIgnorePatterns": [
-      "/node_modules/",
-      "/client/",
-      "/tests/"
-    ],
-    "coverageThreshold": {
-      "global": {
-        "statements": 80,
-        "branches": 60,
-        "functions": 70,
-        "lines": 82
-      }
-    }
   }
 }

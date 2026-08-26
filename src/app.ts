@@ -2,7 +2,15 @@ import express, { type Express } from "express";
 import helmet from "helmet";
 import cors from "cors";
 import compression from "compression";
-import pinoHttp from "pino-http";
+import pinoHttpModule from "pino-http";
+
+// pino-http ships CJS `export =`-style types; under NodeNext ESM the
+// callable lives on the namespace's default at runtime.
+const pinoHttp = (
+  pinoHttpModule as unknown as {
+    default: typeof pinoHttpModule.default;
+  }
+).default;
 import promClient from "prom-client";
 import crypto from "node:crypto";
 import swaggerUi from "swagger-ui-express";
