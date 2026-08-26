@@ -1,6 +1,5 @@
 # PLAN.md — Secrets → TypeScript → Ship
 
-> **Branch:** `feat/typescript-esm`
 > **Branch:** `feat/typescript-esm` — merged to `main` via PR #2 (`203aeab`)
 > **Location:** `docs/planning/PLAN.md` — start sessions HERE
 > **Last updated:** 2026-08-26 (session close)
