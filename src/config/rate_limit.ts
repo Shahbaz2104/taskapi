@@ -3,7 +3,7 @@ import rateLimit, { type Options } from "express-rate-limit";
 import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { getClient, isAvailable } from "./redis.js";
 
-const buildLimiter = (options: Options): RequestHandler => {
+const buildLimiter = (options: Partial<Options>): RequestHandler => {
   const config = { ...options };
   if (isAvailable()) {
     const redis = getClient();

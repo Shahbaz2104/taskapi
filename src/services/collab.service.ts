@@ -14,7 +14,7 @@ const ROLE_RANK: Record<CollabRole, number> = {
 interface AccessContext {
   taskId: string | Types.ObjectId;
   userId: string | Types.ObjectId;
-  minRole: Exclude<CollabRole, "owner">;
+  minRole: CollabRole;
 }
 
 type AccessResult =
