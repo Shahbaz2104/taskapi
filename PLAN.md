@@ -1,8 +1,8 @@
 # PLAN.md — Secrets → TypeScript → Ship
 
 > **Branch:** `feat/typescript-esm`
-> **Last updated:** 2026-08-25 (end of session 1)
-> **Status:** Step 1 complete, committed. **Next: Step 2 (tooling).**
+> **Last updated:** 2026-08-26 (session 2)
+> **Status:** Steps 1–2 complete, committed. **Next: Step 3a (`src/config/` + env.ts).**
 > Supersedes the earlier TaskForge mega-plan. `features.txt` is shelved — do not
 > reopen it unless a future goal demands one specific feature from it.
 
@@ -17,18 +17,18 @@ git log --oneline -5        # confirm session-1 commits exist
 git status                  # should be clean
 ```
 
-Then execute **Step 2 — Tooling foundation** below. Do not skip ahead; each
-step ends with the full test suite green and a commit.
+Then execute **Step 3a (`src/config/`)** below. Do not skip ahead; each step
+ends with the full test suite green and a commit.
 
 ---
 
 ## 0. Manual prerequisites (USER — not agent)
 
-| # | Action | Status |
-|---|--------|--------|
-| 0.1 | Rotate MongoDB Atlas user password | ☐ **VERIFY WITH USER** |
-| 0.2 | New `JWT_SECRET` (`openssl rand -base64 48`) in local `.env` | ☐ **VERIFY WITH USER** |
-| 0.3 | Repo stays private until history purge (see `docs/SECURITY.md`) | ongoing |
+| #   | Action                                                          | Status                 |
+| --- | --------------------------------------------------------------- | ---------------------- |
+| 0.1 | Rotate MongoDB Atlas user password                              | ☐ **VERIFY WITH USER** |
+| 0.2 | New `JWT_SECRET` (`openssl rand -base64 48`) in local `.env`    | ☐ **VERIFY WITH USER** |
+| 0.3 | Repo stays private until history purge (see `docs/SECURITY.md`) | ongoing                |
 
 ## Decisions (locked — do not relitigate)
 
@@ -48,15 +48,16 @@ step ends with the full test suite green and a commit.
 - [x] `.gitignore`: prompt.txt / features.txt ignored (local spec files)
 - [x] Commits: `chore: stop tracking .env` + `docs: security notice …`
 
-## Step 2 — Tooling foundation ☐ NEXT
+## Step 2 — Tooling foundation ✅ DONE
 
-- [ ] `package.json`: `"type": "module"` (⚠️ breaks Jest CJS runs — land together with test config change or accept red until Step 4 within same working stretch; prefer: flip flag + vitest scaffolding early)
-- [ ] devDeps add: `typescript`, `tsx`, `vitest`, `@types/express`, `@types/jsonwebtoken`, `@types/node`, `@types/nodemailer`, `@types/qrcode`, `@types/supertest`, `@types/cors`, `@types/compression`, `@types/swagger-ui-express`, `@types/jsonwebtoken`
-- [ ] devDeps remove: `jest`, `nodemon`; deps remove: `express-validator` (after middleware step), keep bcryptjs/zod/etc.
-- [ ] `tsconfig.json` strict: strict, noImplicitAny, noImplicitReturns, noUncheckedIndexedAccess, exactOptionalPropertyTypes, module/moduleResolution NodeNext, outDir dist, rootDir src; relative imports use `.js` extensions (ESM rule)
-- [ ] `tsconfig.build.json` (excludes tests)
-- [ ] ESLint flat config → typescript-eslint (strict, no-explicit-any warn→error); Prettier unchanged
-- [ ] Scripts: `dev`=`tsx watch src/server.ts`, `build`=`tsc -p tsconfig.build.json`, `start`=`node dist/server.js`, `test`=`vitest run`, `typecheck`=`tsc --noEmit`
+- [x] `package.json`: `"type": "module"` — **DEFERRED to cutover** (end of Step 4): flipping now breaks all Jest CJS runs, so dual-stack instead — legacy JS keeps running under Jest while `src/**/*.ts` grows via tsx/vitest; flag flips together with script swap + jest/nodemon removal so every intermediate commit stays green (user-approved deviation)
+- [x] devDeps add: `typescript@6`, `tsx`, `vitest@4`, `@vitest/coverage-v8`, `typescript-eslint@8` (unified pkg incl. plugin+parser), `@types/{node,express,jsonwebtoken,nodemailer,qrcode,supertest,cors,compression,swagger-ui-express}` + `@types/swagger-jsdoc` (plan gap, added)
+- [ ] devDeps remove: `jest`, `nodemon` → **moved to cutover**; deps remove: `express-validator` (after middleware step), keep bcryptjs/zod/etc.
+- [x] `tsconfig.json` strict: strict, noImplicitAny, noImplicitReturns, noUncheckedIndexedAccess, exactOptionalPropertyTypes, NodeNext, isolatedModules, esModuleInterop, skipLibCheck; relative imports use `.js` extensions (ESM rule). Note: rootDir/outDir live in build config so future `tests/` typecheck without TS6059
+- [x] `tsconfig.build.json` (rootDir src, outDir dist, excludes tests + vitest.config.mts)
+- [x] ESLint flat config → `eslint.config.mjs` (ESM-safe before flag flip); typescript-eslint **strict preset explicitly scoped to `**/*.ts` + `**/*.mts`** (v8 presets are NOT auto-scoped — unscoped they error on every legacy `require()`); legacy JS block preserved verbatim; Prettier unchanged
+- [x] `vitest.config.mts` (.mts avoids Vite ESM-in-CJS warning): node env, `tests/**/*.test.ts`, coverage thresholds identical (80/60/70/82); sanity spec verified pipeline then removed
+- [x] Scripts: `typecheck`=`tsc --noEmit` added now; `dev`/`build`/`start`/`test` swap happens at cutover
 
 ## Step 3 — Layer-by-layer conversion (commit per layer)
 
@@ -108,3 +109,4 @@ Small wins allowed anytime: fix client P7 e2e (`page.goto("/dashboard")` at top 
 ## Progress Log
 
 - **2026-08-25 (session 1):** Audited repo fully (54 JS files, ~7.8k LOC, 149 tests green). Wrote plan, got approvals (Zod consolidation, Vitest). Created branch, untracked `.env`, wrote docs/SECURITY.md, ignored local spec files. Stopped before Step 2.
+- **2026-08-26 (session 2):** Step 2 done as dual-stack (user approved deferring `type: module` to cutover): TS6/Vitest4/typescript-eslint8 + all @types installed; tsconfig(.build).json strict NodeNext; eslint.config.mjs with strict preset scoped to TS globs (unscoped preset errors on legacy require()); vitest.config.mts with identical coverage thresholds; `typecheck` script added. Env repair: cached mongod 8.2.1 binary was a truncated ELF (the known sandbox SIGSEGV) — re-extracted from cached tgz, jest back to green. Gates: lint ✓ typecheck ✓ prettier ✓ vitest sanity ✓ jest 149/149 ✓. Next: 3a.
