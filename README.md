@@ -1,12 +1,13 @@
 # 📝 Task Management API
 
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-000000?style=flat&logo=express&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=flat&logo=mongodb&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![CI](https://img.shields.io/badge/CI-passing-brightgreen)
 
-A production-grade **RESTful Task Management API** built with **Node.js, Express 5, MongoDB (Mongoose)**, and **Redis**. Users register, log in with **JWT access + rotating refresh tokens** (optionally hardened with **TOTP two-factor auth and recovery codes**), and manage tasks with priorities, due dates, tags, search, recurrence, **soft-delete trash**, **bulk operations**, **CSV/JSON import**, an **iCal calendar feed**, **webhooks**, and **task sharing with comments and an activity trail**. Includes RBAC, email verification, password reset, due-date reminders, rate limiting, idempotency, **PostHog product analytics**, and **Sentry error tracking** — covered by **149 integration & unit tests**.
+A production-grade **RESTful Task Management API** built with **TypeScript (native ESM)** on **Node.js + Express 5**, **MongoDB (Mongoose)**, and **Redis**. Users register, log in with **JWT access + rotating refresh tokens** (optionally hardened with **TOTP two-factor auth and recovery codes**), and manage tasks with priorities, due dates, tags, search, recurrence, **soft-delete trash**, **bulk operations**, **CSV/JSON import**, an **iCal calendar feed**, **webhooks**, and **task sharing with comments and an activity trail**. Includes RBAC, email verification, password reset, due-date reminders, rate limiting, idempotency, **PostHog product analytics**, and **Sentry error tracking** — fully covered by **184 Vitest integration & unit tests**.
 
 ---
 
@@ -41,10 +42,10 @@ A production-grade **RESTful Task Management API** built with **Node.js, Express
 - 🛡️ **Security** — helmet, CORS, Redis-backed rate limiting (global + login/register/forgot/reset/2FA challenge), bcrypt, refresh-token reuse detection, generic 5xx responses
 - 🧾 **Idempotency** — `Idempotency-Key` header dedupes retries on `POST /tasks` and task imports (Mongo-backed, TTL 24h)
 - 📈 **Analytics & errors** — PostHog product events through a soft-fail seam; Sentry captures route errors + queue failures without DSN-configured noise in dev
-- 📖 **Self-documenting API** — interactive Swagger UI at `/api-docs`
-- 🧪 **Testing** — 149 tests (integration + unit), coverage thresholds enforced in CI
+- 📖 **OpenAPI-served API** — Swagger UI at `/api-docs` (endpoint annotations being re-added after the TS migration — see Known gaps)
+- 🧪 **Testing** — 184 tests (integration + unit) on **Vitest**, coverage thresholds enforced in CI
 - 🐳 **Dockerized** — `docker compose up` runs app + MongoDB + Redis with healthchecks
-- 🚦 **CI pipeline** — GitHub Actions: lint + format check + tests with coverage on Node 20 & 22
+- 🚦 **CI pipeline** — GitHub Actions: typecheck + lint + format + tests-with-coverage + build on Node 20 & 22
 
 ---
 
@@ -89,7 +90,7 @@ A production-grade **RESTful Task Management API** built with **Node.js, Express
 - **2FA challenge tokens are purpose-scoped** — a separate short-lived JWT claim means an auth challenge can never be replayed as an API access token (and vice versa).
 - **Access chokepoint for collaboration** — every shared-task route resolves permissions through `loadTaskWithAccess` (owner > editor > viewer). A failed lookup collapses to 404 so outsiders learn nothing about task existence.
 - **Async work via BullMQ** — emails, reminders, trash purges and webhook deliveries are enqueued and processed by workers; the request path never blocks. Webhook enqueueing is best-effort: a queue outage never fails the product action that triggered it.
-- **Service layer** — controllers stay thin (HTTP concerns only); business logic lives in `services/` and is unit-testable. New endpoints validate with zod schemas; legacy routes keep express-validator.
+- **Service layer** — controllers stay thin (HTTP concerns only); business logic lives in `src/services/` and is unit-testable. All request validation is **zod** (`src/schemas/`) — the single source of truth.
 - **Idempotent writes** — a unique `(user, key)` index reserves the response _before_ the mutation happens, so retries return the original result.
 - **Not over-engineered** — monolith-first with Redis/queue as the first extractable pieces when a real scaling driver appears.
 
@@ -97,62 +98,43 @@ A production-grade **RESTful Task Management API** built with **Node.js, Express
 
 ```
 taskapi/
- ├─ index.js                    # Entry: env check, middleware, /api/v1 mount, workers, graceful shutdown
- ├─ package.json
- ├─ .env.example                # Environment variable template
- ├─ Dockerfile                  # Multi-stage production image
- ├─ docker-compose.yml          # App + MongoDB + Redis with healthchecks
- ├─ .github/workflows/ci.yml    # CI: lint + format + tests + coverage thresholds
- ├─ config/
- │   ├─ db.js                   # MongoDB connect/disconnect
- │   ├─ redis.js                # Redis client (soft-fail init)
- │   ├─ rate_limit.js           # Redis-backed limiter factory
- │   ├─ logger.js               # pino logger (silent under test)
- │   ├─ swagger.js              # OpenAPI spec (served at /api-docs)
- │   ├─ posthog.js              # PostHog analytics client (soft-fail)
- │   ├─ sentry.js               # Sentry error tracking (soft-fail)
- │   └─ constants.js            # Shared enums, queue names, TTLs
- ├─ models/
- │   ├─ users_models.js         # User (+ 2FA fields, iCal feed token)
- │   ├─ tasks_models.js         # Task (text/compound indexes, deletedAt trash flag)
- │   ├─ token_models.js         # Refresh tokens (hashed, sessions with ip/userAgent)
- │   ├─ task_share_models.js    # Collaboration grants (viewer/editor)
- │   ├─ comment_models.js       # Task comments
- │   ├─ activity_models.js      # Append-only per-task activity trail
- │   ├─ webhook_models.js       # Webhook endpoints (secret, subscriptions, failures)
- │   └─ idempotency_models.js   # Idempotency records (TTL 24h)
- ├─ services/
- │   ├─ tasks.service.js        # Listing pipeline, stats, CSV/iCal writers, import, bulk/trash, recurrence spawning
- │   ├─ auth.service.js         # Token issuance/rotation, sessions, TOTP, recovery codes, feed tokens
- │   ├─ collab.service.js       # Access chokepoint, activity recording, shared inbox
- │   ├─ webhooks.service.js     # Event fan-out, HMAC signing, delivery bookkeeping
- │   ├─ analytics.service.js    # PostHog capture seam (never throws)
- │   └─ email.service.js        # Nodemailer + BullMQ queue (direct-send fallback)
- ├─ jobs/
- │   ├─ email_worker.js         # Sends queued emails
- │   ├─ reminders.js            # Hourly due-date reminders
- │   ├─ trash_cleanup.js        # Daily purge of expired trash
- │   └─ webhooks_worker.js      # Signed deliveries with retries + circuit breaker
- ├─ controllers/
- │   ├─ auth_controller.js      # register / login / refresh / logout / verify / forgot / reset / 2FA challenge
- │   ├─ tasks_controller.js     # CRUD + stats + export/import + bulk + trash + calendar feed
- │   ├─ user_controller.js      # /me profile, password, 2FA enrollment, sessions, calendar-feed mgmt, account deletion
- │   ├─ collab_controller.js    # Shares, comments, activity, shared inbox
- │   ├─ webhooks_controller.js  # Webhook CRUD + ping
- │   └─ admin_controller.js     # User management (list / role / delete)
- ├─ routes/
- │   ├─ auth_routes.js          # /api/v1/auth (rate-limited)
- │   ├─ tasks_routes.js         # /api/v1/tasks (protected; public calendar.ics before the guard)
- │   ├─ user_routes.js          # /api/v1/me (protected)
- │   └─ admin_routes.js         # /api/v1/admin (admin only)
- ├─ middleware/
- │   ├─ auth_middleware.js      # protect — verifies Bearer JWT
- │   ├─ rbac.js                 # authorize(...roles) — role guard
- │   ├─ validate.js             # express-validator rules (legacy routes)
- │   ├─ zod_validate.js         # zod schema validation (new routes)
- │   └─ error_handler.js        # central error handler (generic 5xx)
- └─ __tests__/                  # 11 suites — tasks, auth lifecycle, sessions, 2FA, trash,
-                                # import/iCal, webhooks, collab, analytics, observability, server
+ ├─ src/
+ │   ├─ app.ts                  # Pure Express construction (routes/middleware/metrics/docs)
+ │   ├─ server.ts               # Boot: env fail-fast → DB → Redis → listen + workers + graceful shutdown
+ │   ├─ config/
+ │   │   ├─ env.ts              # Zod-validated env (single source of truth for all 20 keys)
+ │   │   ├─ constants.ts        # Typed enums/queues/TTLs (+ exported unions)
+ │   │   ├─ db.ts  redis.ts     # Mongo connection · soft-fail Redis client
+ │   │   ├─ logger.ts           # pino (silent under test)
+ │   │   ├─ rate_limit.ts       # Redis-backed limiter factory (memory fallback)
+ │   │   ├─ sentry.ts  posthog.ts  # Soft-fail observability seams
+ │   │   └─ swagger.ts          # OpenAPI spec served at /api-docs
+ │   ├─ models/                 # Mongoose schemas w/ InferSchemaType typing
+ │   │   └─ task/user/token/webhook/idempotency/activity/comment/taskShare.ts
+ │   ├─ schemas/                # Zod request schemas — mirror of the old validator chains
+ │   │   └─ auth/account/admin/tasks/bulk/sharing/webhooks/params.ts
+ │   ├─ middleware/
+ │   │   ├─ auth.ts             # protect (Bearer JWT) + currentUser guard
+ │   │   ├─ rbac.ts             # authorize(...roles)
+ │   │   ├─ zod.ts              # zodValidate(schema, source)
+ │   │   └─ error_handler.ts    # pino-logged central handler (generic 5xx)
+ │   ├─ services/               # Business logic — auth/tasks/collab/webhooks/email/analytics
+ │   ├─ jobs/                   # BullMQ workers: email/reminders/trash-cleanup/webhooks
+ │   ├─ controllers/            # Thin HTTP handlers (auth/tasks/user/collab/webhooks/admin)
+ │   ├─ routes/                 # auth/tasks/user/admin routers under /api/v1
+ │   ├─ dto/                    # PublicUser serializer (secret-leak-proof by construction)
+ │   ├─ errors/                 # AppError hierarchy (400→502) + isAppError guard
+ │   └─ types/                  # JWT payload union, RequestUser, global req.user
+ ├─ tests/
+ │   ├─ vitest.setup.ts         # Env seeded BEFORE module imports
+ │   ├─ unit/                   # env · errors · dto · middleware · pure service logic
+ │   └─ integration/            # Full-app suites: boot/sessions/auth/tasks/trash/
+ │                              # collab/webhooks/twofa/import-iCal/observability
+ ├─ scripts/boot-check.mjs      # Boots compiled dist vs memory-mongo and smoke-tests it
+ ├─ tsconfig.json / tsconfig.build.json
+ ├─ vitest.config.mts           # Node env · coverage thresholds 80/60/70/82
+ ├─ Dockerfile                  # Multi-stage: build (tsc) → prod deps → slim runner
+ └─ docker-compose.yml          # App + MongoDB + Redis with healthchecks
 ```
 
 ---
@@ -171,6 +153,18 @@ git clone <repo-url>
 cd taskapi
 npm install
 ```
+
+### Scripts
+
+| Command                 | What it does                                      |
+| ----------------------- | ------------------------------------------------- |
+| `npm run dev`           | Dev server with watch (`tsx watch src/server.ts`) |
+| `npm run build`         | Compile to `dist/` (`tsc -p tsconfig.build.json`) |
+| `npm start`             | Run compiled output (`node dist/server.js`)       |
+| `npm test`              | Full Vitest suite                                 |
+| `npm run test:coverage` | Suite + v8 coverage report                        |
+| `npm run typecheck`     | Strict `tsc --noEmit`                             |
+| `npm run lint`          | ESLint (typescript-eslint strict)                 |
 
 ### Configuration
 
@@ -341,11 +335,12 @@ Verify by recomputing the HMAC over `${header.timestamp}.${rawBody}` with your e
 ## 🧪 Running Tests
 
 ```bash
-npm test           # 149 tests: integration + unit, with coverage thresholds
-npm run test:watch # Watch mode
+npm test               # 184 tests: full-app integration + unit suites
+npm run test:coverage  # same suite with v8 coverage report
+node scripts/boot-check.mjs  # boots compiled dist against an in-memory Mongo and smoke-tests it
 ```
 
-Coverage thresholds are enforced (statements ≥80%, branches ≥60%, functions ≥70%, lines ≥82%) — CI fails if coverage drops. Run the report locally with `npm test -- --coverage`.
+Coverage thresholds are enforced (statements ≥80%, branches ≥60%, functions ≥70%, lines ≥82%) — CI fails if coverage drops.
 
 ---
 
@@ -356,14 +351,15 @@ Coverage thresholds are enforced (statements ≥80%, branches ≥60%, functions 
 - **Redis + BullMQ** — Shared rate limiting, stats cache, email queue, reminder cron, trash purge, webhook deliveries
 - **jsonwebtoken + bcryptjs** — JWT access tokens, hashed refresh tokens, password hashing
 - **otplib + qrcode** — TOTP two-factor auth with authenticator QR provisioning
-- **zod** — schema validation on newer endpoints (express-validator on legacy ones)
+- **zod** — request/response validation across every route (`src/schemas/`)
 - **@sentry/node** — error tracking with Express integration (soft-fail)
 - **posthog-node** — product analytics through a swallow-all capture seam
 - **helmet / cors / compression / express-rate-limit / rate-limit-redis** — Security & performance
 - **pino + pino-http + prom-client** — Structured logging, request IDs, metrics
 - **nodemailer** — Email delivery (SMTP)
 - **swagger-jsdoc + swagger-ui-express** — OpenAPI docs
-- **Jest + Supertest + mongodb-memory-server** — Testing
+- **TypeScript 6 (strict, native ESM) + tsx** — Type-safe runtime & dev server
+- **Vitest + Supertest + mongodb-memory-server** — Testing
 
 ---
 
@@ -375,21 +371,21 @@ The API is Docker-ready and deploys as-is to **Render**, **Railway**, or **Fly.i
 2. Set env vars: `MONGO_URI`, `JWT_SECRET`, `REDIS_URL`, `SMTP_*` (for emails), `CORS_ORIGIN`, optionally `SENTRY_DSN` / `POSTHOG_API_KEY`
 3. Build `npm ci`, start `npm start` — the `/ready` probe drives health checks
 
-When you have a live URL, paste it into the `servers` array in `config/swagger.js`
+When you have a live URL, paste it into the `servers` array in `src/config/swagger.ts`
 and swap the static CI badge for a live one from GitHub's actions page.
 
 ---
 
 ## 📝 Resume / Portfolio Description
 
-> Built a production-grade RESTful Task Management API (Node.js, Express 5, MongoDB, Redis):
+> Built a production-grade RESTful Task Management API (TypeScript ESM, Express 5, MongoDB, Redis):
 > JWT auth with refresh-token rotation and theft detection, TOTP two-factor auth with recovery
 > codes, per-device session management, RBAC, recurring tasks with race-safe spawning, full-text
 > search, bulk operations with soft-delete trash retention, CSV/JSON import with idempotent
 > partial-success semantics, an RFC 5545 iCal feed, HMAC-signed webhooks with automatic circuit
 > breaking, task sharing with comments and an audit trail, PostHog analytics and Sentry error
 > tracking, Redis-backed rate limiting, BullMQ job workers, Prometheus metrics, Docker Compose,
-> and CI with coverage gates — covered by 149 integration and unit tests.
+> and CI with typecheck/coverage/build gates — covered by 184 integration and unit tests.
 
 ---
 
@@ -410,5 +406,7 @@ and swap the static CI badge for a live one from GitHub's actions page.
 - [x] CSV/JSON import + iCal calendar feed
 - [x] Signed webhooks with retries and auto-disable
 - [x] Task sharing with comments and activity trail
+- [x] Full TypeScript (strict) + native ESM migration with zero behavior drift
+- [x] Jest → Vitest port (184 tests) + compiled-dist boot smoke in CI-ready scripts
 - [ ] Cursor-based pagination for deep pages
 - [ ] Frontend client (React) consuming the API
