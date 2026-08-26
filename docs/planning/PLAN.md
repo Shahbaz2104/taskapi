@@ -4,7 +4,8 @@
 > **Location:** `docs/planning/PLAN.md` (consolidated out of repo root 2026-08-26 — start sessions HERE)
 > **Last updated:** 2026-08-26 (session 2)
 > **Location:** this file lives at docs/planning/PLAN.md
-> **Status:** Steps 1–3 COMPLETE (3a–3h). New TS tree boots green end-to-end. **Next: Step 4 — port the 11 Jest suites to Vitest, then the CUTOVER commit** (flip type:module, swap scripts, remove jest/nodemon/express-validator, DELETE legacy JS dirs).
+> **Status:** Steps 1–3 COMPLETE. Step 4 HALF-DONE (5/11 suites ported — see ⚡ RESUME HERE). New tree boots green end-to-end: vitest 74/74 · jest legacy 149/149.
+> **Last updated:** 2026-08-26 (break point after test-port batch 1)
 > Supersedes the earlier TaskForge mega-plan. `features.txt` is shelved — do not
 > reopen it unless a future goal demands one specific feature from it.
 
@@ -19,9 +20,33 @@ git log --oneline -5        # confirm session-1 commits exist
 git status                  # should be clean
 ```
 
-Then execute **Step 3f (`src/controllers/` + `routes/` + `src/schemas/`)**
-below. Do not skip ahead; each step ends with the full test suite green
-and a commit.
+## ⚡ RESUME HERE (after break)
+
+Session start: read this block → `git log --oneline -8` → `git status` (must be clean).
+
+**Where we are:** Step 4 batch 1 committed (`5d74aa3`). Ported: analytics,
+observability, sessions, server (rebuilt on createApp split). unit_tests.js
+is superseded by tests/unit/* superset — do NOT port it.
+
+### TODO — remaining work, in order
+
+- [ ] **Port 6 remaining suites** (`__tests__/*.js` → `tests/integration/*.test.ts`,
+      same pattern as sessions.test.ts: memory-mongo in beforeAll, dynamic imports,
+      PORT env line must be OMITTED, afterEach collection cleanup): 1. trash_test.js (289L) 2. collab_test.js (288L) 3. webhooks_test.js (280L) 4. twofa_test.js (285L) 5. import_ical_test.js (280L) — stubs global.fetch ×2 → vi.stubGlobal 6. tasks_test.js (985L — biggest; list/sort/search/stats/export/update/
+      recurrence-spawn/idempotency-replay paths)
+- [ ] Run FULL gates: vitest (expect ~200+), jest still 149, typecheck, lint, prettier
+- [ ] **CUTOVER commit** (checklist below): flip "type":"module", scripts swap,
+      remove jest/nodemon devDeps + express-validator dep, DELETE legacy dirs
+      (config controllers middleware models routes services jobs index.js **tests**/
+      validate.js dies here), eslint drop legacy-JS block + globals.jest,
+      tsconfig.build excludes already fine
+- [ ] Post-cutover verify: npm run build ✓ dist/server boots ✓ docker build ✓
+- [ ] CI (.github/ci.yml): swap to new scripts, add typecheck+build to matrix,
+      coverage provider v8 thresholds unchanged
+- [ ] Swagger decision RECORDED: /api-docs loses annotations at cutover until
+      annotations re-added to src/controllers (README note at Step 5)
+
+Step 4 mechanics proven — copy patterns from tests/integration/sessions.test.ts.
 
 ---
 
@@ -120,3 +145,5 @@ Small wins allowed anytime: fix client P7 e2e (`page.goto("/dashboard")` at top 
 - **2026-08-26 (session 2, cont. 5):** Step 3e done — all 6 services typed; webhooks queue singleton (per-call Queue killed); email transporter lazy (import side-effect-free, proven via tsx smoke of all 6 modules); auth throws → AppError classes; tasks.service facets/parser/import fully typed + 13 new pure-function tests. Gates: typecheck ✓ lint ✓ prettier ✓ vitest 37/37 ✓ jest 149/149 ✓. Next: 3f (controllers+routes+schemas — biggest remaining layer).
 
 - **2026-08-26 (session 2, AFK stretch):** Steps 3f+3g+3h ALL DONE in one autonomous run. 3f: 8 zod schema files mirror every EV rule message-for-message (two porting bugs CAUGHT by the new integration suite and fixed: bulk priority + update status missing .optional()); 6 controllers + 4 routes; requireUser helper (currentUser) added to middleware/auth. 3g: 4 jobs with typed payloads, QUEUES constants, no hardcoded queue strings; trash worker error reporting via worker.on('error'). 3h: createApp()/boot split — NO module-scope connectDB; graceful shutdown preserved; metrics registered once via flag. NEW: tests/integration/app.test.ts boots the ENTIRE new tree against memory-mongo — register/validation/me/tasks CRUD/bulk trash-restore/login/refresh-rotation-reuse-detection all green (10 tests). Strict-TS lessons this stretch: mongoose v9 + EOT rejects undefined-valued keys in create() AND query filters (compact() helper / `as never` on optional-var filters); express-rate-limit v8 exports required-Options but rateLimit() takes Partial<Options>; bullmq repeat opts need cast; FilterQuery not exported from mongoose root in v9. Gates at every step: typecheck+lint+prettier clean, vitest 47/47 (6 files), jest legacy 149/149 untouched-green.
+
+- **2026-08-26 (session 2, break point):** Step 4 batch 1 committed. env.ts redesigned as live proxy (string keys re-read process.env — required for suite parity with lazy legacy reads); vitest harness gains setup file + 30s timeouts; 4 suites ported + server_test rebuilt on clean split; swagger-ui restored in app.ts; PORT=0 lines dropped (zod rejects port 0). unit_tests.js officially superseded by tests/unit superset. vitest 74/74 (10 files) · jest 149/149 · all static gates green. NEXT on resume: port trash → collab → webhooks → twofa → import_ical → tasks(985L), then cutover checklist (see RESUME HERE).
