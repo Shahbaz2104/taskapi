@@ -3,5 +3,6 @@ npm-debug.log
 .env
 coverage
 .git
+dist
 Dockerfile
 docker-compose.yml
