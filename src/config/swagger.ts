@@ -97,7 +97,7 @@ const options = {
       },
     },
   },
-  apis: ["./controllers/*.js"],
+  apis: ["./src/controllers/*.ts"],
 };
 
 export const swaggerSpec = swaggerJSDoc(options);

@@ -14,20 +14,6 @@ export default tseslint.config(
   },
   prettier,
   {
-    files: ["**/*.js"],
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: "commonjs",
-      globals: {
-        ...globals.node,
-        ...globals.jest,
-      },
-    },
-    rules: {
-      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
-    },
-  },
-  {
     files: ["**/*.ts", "**/*.mts"],
     languageOptions: {
       ecmaVersion: 2023,
