@@ -33,8 +33,8 @@ beforeAll(async () => {
 
   app = express();
   app.use(express.json());
-  app.use("/api/v1/auth", authRoutes);
-  app.use("/api/v1/me", userRoutes);
+  app.use("/api/v1/auth", authRoutes as unknown as express.Router);
+  app.use("/api/v1/me", userRoutes as unknown as express.Router);
   app.use((_req, res) => res.status(404).json({ error: "Route not found" }));
   app.use(errorHandler);
 }, 60000);

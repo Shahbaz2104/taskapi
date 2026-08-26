@@ -9,9 +9,15 @@ const zodValidate =
     const result = schema.safeParse(req[source] as unknown);
     if (!result.success) {
       const issue = result.error.issues[0];
-      const label = [source, ...(issue?.path ?? [])].filter(Boolean).join(".");
+      // Legacy express-validator param chains answered with the bare
+      // message; body/query sources follow the newer labeled convention.
+      const issuePath =
+        source === "params" ? [] : [source, ...(issue?.path ?? [])];
+      const label = issuePath.filter(Boolean).join(".");
       res.status(400).json({
-        error: issue ? `${label}: ${issue.message}` : `${label}: Invalid input`,
+        error: issue
+          ? `${label ? `${label}: ` : ""}${issue.message}`
+          : `${label ? `${label}: ` : ""}Invalid input`,
       });
       return;
     }

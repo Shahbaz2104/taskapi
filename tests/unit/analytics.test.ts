@@ -1,26 +1,28 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("posthog-node", () => ({
-  PostHog: class {
+const { PostHogMock } = vi.hoisted(() => {
+  class PostHogMock {
     static lastArgs: unknown[] = [];
     capture = vi.fn();
     shutdown = vi.fn().mockResolvedValue(undefined);
     constructor(...args: unknown[]) {
-      PostHog.lastArgs = args;
+      PostHogMock.lastArgs = args;
     }
-  },
-}));
+  }
+  return { PostHogMock };
+});
 
-const { PostHog } = await import("posthog-node");
-const posthog = await import("../../src/config/posthog.js");
-const analytics = await import("../../src/services/analytics.service.js");
+vi.mock("posthog-node", () => ({ PostHog: PostHogMock }));
+
+import * as posthog from "../../src/config/posthog.js";
+import * as analytics from "../../src/services/analytics.service.js";
 
 describe("PostHog config + analytics service", () => {
   const realNodeEnv = process.env.NODE_ENV;
 
   beforeEach(() => {
     process.env.NODE_ENV = "development";
-    ((PostHog as unknown as { lastArgs: unknown[] }).lastArgs = []);
+    PostHogMock.lastArgs = [];
   });
 
   afterEach(async () => {
@@ -40,9 +42,8 @@ describe("PostHog config + analytics service", () => {
   it("initializes a client from env vars", () => {
     posthog.initPosthog();
     expect(posthog.isAvailable()).toBe(true);
-    const ctor = PostHog as unknown as { lastArgs: unknown[] };
-    expect(ctor.lastArgs[0]).toBe("phc_test_key");
-    expect(ctor.lastArgs[1]).toMatchObject({
+    expect(PostHogMock.lastArgs[0]).toBe("phc_test_key");
+    expect(PostHogMock.lastArgs[1]).toMatchObject({
       host: "https://us.i.posthog.com",
     });
   });

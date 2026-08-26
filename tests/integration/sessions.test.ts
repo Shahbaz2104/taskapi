@@ -22,8 +22,8 @@ beforeAll(async () => {
 
   app = express();
   app.use(express.json());
-  app.use("/api/v1/auth", authRoutes);
-  app.use("/api/v1/me", userRoutes);
+  app.use("/api/v1/auth", authRoutes as unknown as express.Router);
+  app.use("/api/v1/me", userRoutes as unknown as express.Router);
   app.use((_req, res) => res.status(404).json({ error: "Route not found" }));
   app.use(errorHandler);
 }, 60000);
@@ -46,14 +46,14 @@ interface Pair {
   sessionId: string;
 }
 
-const registerAndLogin = async (
-  username = "sessuser"
-): Promise<Pair> => {
-  await request(app).post("/api/v1/auth/register").send({
-    username,
-    email: `${username}@example.com`,
-    password: "password1",
-  });
+const registerAndLogin = async (username = "sessuser"): Promise<Pair> => {
+  await request(app)
+    .post("/api/v1/auth/register")
+    .send({
+      username,
+      email: `${username}@example.com`,
+      password: "password1",
+    });
   const res = await request(app)
     .post("/api/v1/auth/login")
     .send({ username, password: "password1" });
