@@ -1,8 +1,9 @@
 # PLAN.md — Secrets → TypeScript → Ship
 
 > **Branch:** `feat/typescript-esm`
+> **Location:** `docs/planning/PLAN.md` (consolidated out of repo root 2026-08-26 — start sessions HERE)
 > **Last updated:** 2026-08-26 (session 2)
-> **Status:** Steps 1–2 + 3a complete, committed. **Next: Step 3b (`src/types/` + `src/errors/` + DTOs).**
+> **Status:** Steps 1–2 + 3a + 3b complete, committed. **Next: Step 3c (`src/models/`).**
 > Supersedes the earlier TaskForge mega-plan. `features.txt` is shelved — do not
 > reopen it unless a future goal demands one specific feature from it.
 
@@ -17,8 +18,8 @@ git log --oneline -5        # confirm session-1 commits exist
 git status                  # should be clean
 ```
 
-Then execute **Step 3b (`src/types/` + `src/errors/`)** below. Do not skip
-ahead; each step ends with the full test suite green and a commit.
+Then execute **Step 3c (`src/models/`)** below. Do not skip ahead; each step
+ends with the full test suite green and a commit.
 
 ---
 
@@ -28,7 +29,7 @@ ahead; each step ends with the full test suite green and a commit.
 | --- | --------------------------------------------------------------- | ---------------------- |
 | 0.1 | Rotate MongoDB Atlas user password                              | ☐ **VERIFY WITH USER** |
 | 0.2 | New `JWT_SECRET` (`openssl rand -base64 48`) in local `.env`    | ☐ **VERIFY WITH USER** |
-| 0.3 | Repo stays private until history purge (see `docs/SECURITY.md`) | ongoing                |
+| 0.3 | Repo stays private until history purge (see `../SECURITY.md`) | ongoing                |
 
 ## Decisions (locked — do not relitigate)
 
@@ -64,7 +65,7 @@ ahead; each step ends with the full test suite green and a commit.
 Order & notes (from completed code audit):
 
 - [x] **3a `src/config/`** ✅ — all 8 modules ported + `env.ts` (Zod schema covers **all 20 repo-wide keys**, not just config's own — later layers import `env.*` directly); fail-fast on MONGO_URI/JWT_SECRET at parse time; `import "dotenv/config"` lives INSIDE env.ts so ordering is safe regardless of import graph (legacy index.js loads dotenv AFTER requiring config — a latent footgun the port kills). `constants.ts` uses `as const` tuples + exported unions (`TaskStatus`, `Role`, …) ready for 3c models & 3f zod enums. Caveats carried forward: swagger `apis` glob still `"./controllers/*.js"` (retarget when controllers migrate in 3f); db/logger keep `console.*` (parity; FIND-007 console→pino swap happens 3d per plan). Jest now ignores `/tests/` (default testMatch was double-running vitest specs). First real Vitest suite: `tests/unit/env.test.ts` 7/7
-- [ ] **3b `src/types/` + `src/errors/` + DTOs** — Express Request augmentation (`req.user`); AppError hierarchy (ValidationError, AuthenticationError, AuthorizationError, NotFoundError, ConflictError, RateLimitError, DatabaseError, ExternalServiceError) replacing ~10× `Object.assign(new Error, {status})`; DTOs so passwordHash/totpSecret/recoveryCodeHash/webhookSecret/refreshTokenHash never leak
+- [x] **3b `src/types/` + `src/errors/` + DTOs** ✅ — `src/errors/index.ts`: AppError base (status via `new.target.name`) + all 8 subclasses; mapped from the 13 real `Object.assign(new Error,{status})` sites (400×3, 401×6, 404×2, 409×2) + forward-stubs for 403/429/500/502 consumers in later layers; `isAppError` guard for the 3d handler. `src/types/auth.ts`: discriminated `SignedJwtPayload` (access vs challenge via `purpose?: undefined` trick) + `RequestUser {userId: Types.ObjectId, role}` matching auth_middleware:17 exactly. `src/types/express.d.ts`: global `req.user?`. `src/dto/user.dto.ts`: `PublicUser` mirrors the /me wire byte-for-byte — verified against user_controller getMe (`select("-password")`, no transforms → includes totpEnabled + `__v` passthrough); `toPublicUser()` serializer makes leaks unrepresentable; secret fields covered by negative tests. Vitest suites now 3 files / 13 tests
 - [ ] **3c `src/models/`** — InferSchemaType/HydratedDocument/Model typing; schemas+indexes identical. Watch: `Schema.Types.Mixed` ×2 (idempotency body, activity meta → type as unknown-record shapes); tags custom validator closure; recurrence enum includes null; users pre-save async hash hook + comparePassword method; webhooks enum fed by inline require (move to constants import)
 - [ ] **3d `src/middleware/`** — auth/rbac/error_handler (pino req.log replaces console.error — FIND-007 rides along)/zodValidate(schema, source) generic; DELETE validate.js after routes migrated
 - [ ] **3e `src/services/`** — typed contracts; tasks.service (584L: aggregation pipeline, stats $facet, CSV/iCal builders, RFC4180 parser, import idempotency w/ E11000 replay), auth.service (rotation/theft-detection/TOTP/recovery/feed tokens; otplib authenticator.options monkey-patch at load → configure explicitly), webhooks.service (kill per-call `new Queue()`), collab (loadTaskWithAccess chokepoint), email (module-load transporter → lazy init), analytics (PostHog seam)
@@ -111,3 +112,4 @@ Small wins allowed anytime: fix client P7 e2e (`page.goto("/dashboard")` at top 
 - **2026-08-25 (session 1):** Audited repo fully (54 JS files, ~7.8k LOC, 149 tests green). Wrote plan, got approvals (Zod consolidation, Vitest). Created branch, untracked `.env`, wrote docs/SECURITY.md, ignored local spec files. Stopped before Step 2.
 - **2026-08-26 (session 2):** Step 2 done as dual-stack (user approved deferring `type: module` to cutover): TS6/Vitest4/typescript-eslint8 + all @types installed; tsconfig(.build).json strict NodeNext; eslint.config.mjs with strict preset scoped to TS globs (unscoped preset errors on legacy require()); vitest.config.mts with identical coverage thresholds; `typecheck` script added. Env repair: cached mongod 8.2.1 binary was a truncated ELF (the known sandbox SIGSEGV) — re-extracted from cached tgz, jest back to green. Gates: lint ✓ typecheck ✓ prettier ✓ vitest sanity ✓ jest 149/149 ✓. Next: 3a.
 - **2026-08-26 (session 2, cont.):** Step 3a done — `src/config/` fully ported + env.ts (20 keys, fail-fast core, self-loading dotenv). Strict-TS friction solved en route: ioredis `call(cmd, args[])` overload + `RedisReply` cast for rate-limit-redis sendCommand; tsx eval snippets are CJS under commonjs package (no top-level await). Jest/vitest overlap fixed via jest testPathIgnorePatterns `/tests/`. Runtime smoke-tested under tsx. Gates: typecheck ✓ lint ✓ prettier ✓ vitest 7/7 ✓ jest 11 suites 149/149 ✓. Next: 3b.
+- **2026-08-26 (session 2, cont. 2):** Step 3b done — errors hierarchy (8 classes mapped from the 13 real throw sites), JWT payload union, global `req.user` augmentation, PublicUser DTO with serializer + leak tests. Gates: typecheck ✓ lint ✓ vitest 13/13 ✓ jest 149/149 ✓. Then consolidated docs: AUDIT.md + PROJECT_STATUS.md → docs/, PLAN.md + CONTINUE.md → docs/planning/, local prompt/features specs → docs/local-specs/ (gitignored by name, still untracked); SECURITY.md cross-ref stays valid as sibling; root now has README.md only. Next: 3c.
