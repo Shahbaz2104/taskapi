@@ -2,7 +2,7 @@
 
 > **Branch:** `feat/typescript-esm`
 > **Last updated:** 2026-08-26 (session 2)
-> **Status:** Steps 1–2 complete, committed. **Next: Step 3a (`src/config/` + env.ts).**
+> **Status:** Steps 1–2 + 3a complete, committed. **Next: Step 3b (`src/types/` + `src/errors/` + DTOs).**
 > Supersedes the earlier TaskForge mega-plan. `features.txt` is shelved — do not
 > reopen it unless a future goal demands one specific feature from it.
 
@@ -17,8 +17,8 @@ git log --oneline -5        # confirm session-1 commits exist
 git status                  # should be clean
 ```
 
-Then execute **Step 3a (`src/config/`)** below. Do not skip ahead; each step
-ends with the full test suite green and a commit.
+Then execute **Step 3b (`src/types/` + `src/errors/`)** below. Do not skip
+ahead; each step ends with the full test suite green and a commit.
 
 ---
 
@@ -63,7 +63,7 @@ ends with the full test suite green and a commit.
 
 Order & notes (from completed code audit):
 
-- [ ] **3a `src/config/`** — db/redis/logger/rate_limit/sentry/posthog/constants/swagger + NEW `env.ts`: Zod-validated config object; replaces **77 scattered `process.env` reads** (hotspots: auth_controller ×11, auth.service ×7, email.service ×8). Fail-fast on missing MONGO_URI/JWT_SECRET (already exists in index.js — move into env.ts)
+- [x] **3a `src/config/`** ✅ — all 8 modules ported + `env.ts` (Zod schema covers **all 20 repo-wide keys**, not just config's own — later layers import `env.*` directly); fail-fast on MONGO_URI/JWT_SECRET at parse time; `import "dotenv/config"` lives INSIDE env.ts so ordering is safe regardless of import graph (legacy index.js loads dotenv AFTER requiring config — a latent footgun the port kills). `constants.ts` uses `as const` tuples + exported unions (`TaskStatus`, `Role`, …) ready for 3c models & 3f zod enums. Caveats carried forward: swagger `apis` glob still `"./controllers/*.js"` (retarget when controllers migrate in 3f); db/logger keep `console.*` (parity; FIND-007 console→pino swap happens 3d per plan). Jest now ignores `/tests/` (default testMatch was double-running vitest specs). First real Vitest suite: `tests/unit/env.test.ts` 7/7
 - [ ] **3b `src/types/` + `src/errors/` + DTOs** — Express Request augmentation (`req.user`); AppError hierarchy (ValidationError, AuthenticationError, AuthorizationError, NotFoundError, ConflictError, RateLimitError, DatabaseError, ExternalServiceError) replacing ~10× `Object.assign(new Error, {status})`; DTOs so passwordHash/totpSecret/recoveryCodeHash/webhookSecret/refreshTokenHash never leak
 - [ ] **3c `src/models/`** — InferSchemaType/HydratedDocument/Model typing; schemas+indexes identical. Watch: `Schema.Types.Mixed` ×2 (idempotency body, activity meta → type as unknown-record shapes); tags custom validator closure; recurrence enum includes null; users pre-save async hash hook + comparePassword method; webhooks enum fed by inline require (move to constants import)
 - [ ] **3d `src/middleware/`** — auth/rbac/error_handler (pino req.log replaces console.error — FIND-007 rides along)/zodValidate(schema, source) generic; DELETE validate.js after routes migrated
@@ -110,3 +110,4 @@ Small wins allowed anytime: fix client P7 e2e (`page.goto("/dashboard")` at top 
 
 - **2026-08-25 (session 1):** Audited repo fully (54 JS files, ~7.8k LOC, 149 tests green). Wrote plan, got approvals (Zod consolidation, Vitest). Created branch, untracked `.env`, wrote docs/SECURITY.md, ignored local spec files. Stopped before Step 2.
 - **2026-08-26 (session 2):** Step 2 done as dual-stack (user approved deferring `type: module` to cutover): TS6/Vitest4/typescript-eslint8 + all @types installed; tsconfig(.build).json strict NodeNext; eslint.config.mjs with strict preset scoped to TS globs (unscoped preset errors on legacy require()); vitest.config.mts with identical coverage thresholds; `typecheck` script added. Env repair: cached mongod 8.2.1 binary was a truncated ELF (the known sandbox SIGSEGV) — re-extracted from cached tgz, jest back to green. Gates: lint ✓ typecheck ✓ prettier ✓ vitest sanity ✓ jest 149/149 ✓. Next: 3a.
+- **2026-08-26 (session 2, cont.):** Step 3a done — `src/config/` fully ported + env.ts (20 keys, fail-fast core, self-loading dotenv). Strict-TS friction solved en route: ioredis `call(cmd, args[])` overload + `RedisReply` cast for rate-limit-redis sendCommand; tsx eval snippets are CJS under commonjs package (no top-level await). Jest/vitest overlap fixed via jest testPathIgnorePatterns `/tests/`. Runtime smoke-tested under tsx. Gates: typecheck ✓ lint ✓ prettier ✓ vitest 7/7 ✓ jest 11 suites 149/149 ✓. Next: 3b.

@@ -84,7 +84,8 @@
   "jest": {
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "/client/"
+      "/client/",
+      "/tests/"
     ],
     "coverageThreshold": {
       "global": {
