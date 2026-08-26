@@ -1,10 +1,13 @@
 # Project Status
 
-Last updated: 2026-08-23
+Last updated: 2026-08-26 (post TypeScript migration — shipped to `main`)
 
 ## Snapshot
 
-- **149 tests passing** across 11 suites; lint, Prettier and coverage gates green in CI (Node 20 & 22)
+- **Stack: TypeScript (strict, native ESM) · Vitest** — legacy CJS/Jest tree fully deleted
+- **184 tests passing** across 16 files (full-app integration + unit); typecheck, ESLint, Prettier, coverage thresholds and a compiled-dist boot smoke all green
+- **Shipped via PR #2** (`203aeab`) with lockfile hotfix (`4c54d0e`); CI pipeline green on `main`: typecheck · lint · format · tests-with-coverage · build (Node 20 & 22)
+- Multi-stage Docker build (tsc → prod deps → slim runner); first real image build happens at deploy time
 - `npm audit`: 0 vulnerabilities at last run
 
 ## What shipped (in commit order)
@@ -17,16 +20,16 @@ Last updated: 2026-08-23
 | 4     | `d89982a`             | TOTP two-factor auth with QR provisioning + 8 single-use recovery codes                                                                                                                                                                            |
 | 5     | `01ad6f6`             | Bulk operations + soft-delete trash with retention job; race-safe recurrence spawn; stats-cache invalidation                                                                                                                                       |
 | —     | —                     | Sentry error tracking + zod validation layer for new endpoints                                                                                                                                                                                     |
-| 9     | `feat/typescript-esm` | Full TypeScript/ESM conversion (config→types→models→middleware→services→controllers/routes/schemas→jobs→app/server), zod schemas as single validation source, Jest→Vitest port with zero behavior drift, ESM cutover, multi-stage tsc Docker build |
 | 6     | `e2066b8`             | CSV/JSON import (partial success, idempotent) + token-authenticated iCal feed                                                                                                                                                                      |
 | 7     | `a9ccabb`             | Signed webhooks with retries, circuit breaker, test ping                                                                                                                                                                                           |
 | 8     | `c1fcb0a`             | Task sharing (viewer/editor), comments, append-only activity trail                                                                                                                                                                                 |
+| 9     | `feat/typescript-esm` | Full TypeScript/ESM conversion (config→types→models→middleware→services→controllers/routes/schemas→jobs→app/server), zod schemas as single validation source, Jest→Vitest port with zero behavior drift, ESM cutover, multi-stage tsc Docker build |
 
 ## Audit follow-ups
 
 Findings and remediation mapping live in `AUDIT.md`. Highlights:
 
-- **FIND-001 (critical)**: real credentials were committed to git history at some point — **rotate the MongoDB Atlas password and `JWT_SECRET`** before exposing the repo publicly. Untracking `.env` / history scrubbing still pending.
+- **FIND-001 (critical)**: real credentials were committed to git history at some point — **rotate the MongoDB Atlas password and `JWT_SECRET`** before exposing the repo publicly. Untracking `.env` is done; history scrubbing still pending (`docs/SECURITY.md`).
 - FIND-002 (token-type confusion) mitigated by purpose-scoped 2FA challenge tokens.
 - FIND-005/FIND-006 fixed opportunistically during the trash phase (stats-cache invalidation; race-safe recurrence spawning).
 - FIND-007 (console.error in request paths) fixed during the TS migration — central handler logs via pino `req.log`.
@@ -38,7 +41,7 @@ Findings and remediation mapping live in `AUDIT.md`. Highlights:
 - Bulk complete intentionally does **not** spawn recurring successors.
 - Collaboration uses a single access chokepoint (`loadTaskWithAccess`); non-members get indistinguishable 404s. Delete/share-management stay owner-only.
 - Webhook enqueueing is best-effort: queue outages never fail product requests.
-- New endpoints validate with zod; legacy routes keep express-validator.
+- All request validation is **zod** (`src/schemas/`) — single source of truth after the TS migration.
 
 ## Known limitations
 
