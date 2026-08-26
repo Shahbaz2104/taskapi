@@ -10,11 +10,11 @@ export default tseslint.config(
   js.configs.recommended,
   {
     extends: [tseslint.configs.strict],
-    files: ["**/*.ts", "**/*.mts"],
+    files: ["**/*.ts", "**/*.mts", "**/*.mjs"],
   },
   prettier,
   {
-    files: ["**/*.ts", "**/*.mts"],
+    files: ["**/*.ts", "**/*.mts", "**/*.mjs"],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: "module",
