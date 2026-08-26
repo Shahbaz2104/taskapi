@@ -2,7 +2,13 @@ import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 import { User } from "../models/user.js";
-import type { DecodedAccessToken } from "../types/auth.js";
+import type { DecodedAccessToken, RequestUser } from "../types/auth.js";
+import { AuthenticationError } from "../errors/index.js";
+
+export const currentUser = (req: Request): RequestUser => {
+  if (!req.user) throw new AuthenticationError();
+  return req.user;
+};
 
 const protect = async (
   req: Request,
