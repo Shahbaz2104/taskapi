@@ -31,6 +31,14 @@ type BulkAction = (typeof BULK_ACTIONS)[number];
 const includesValue = (list: readonly string[], value: unknown): boolean =>
   list.includes(value as string);
 
+const compact = <T extends Record<string, unknown>>(obj: T): T => {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out as T;
+};
+
 const isDuplicateKeyError = (err: unknown): boolean =>
   err instanceof Error && (err as { code?: unknown }).code === 11000;
 
@@ -79,9 +87,9 @@ interface ListParams {
   userId: Id;
   page: number;
   limit: number;
-  status?: string;
-  search?: string;
-  sort?: string;
+  status?: string | undefined;
+  search?: string | undefined;
+  sort?: string | undefined;
 }
 
 const listTasks = async ({
@@ -216,7 +224,7 @@ const csvEscape = (value: unknown): string => {
 
 interface ExportParams {
   userId: Id;
-  status?: string;
+  status?: string | undefined;
 }
 
 const exportTasks = async ({
@@ -266,9 +274,10 @@ const nextDueDate = (
   return d;
 };
 
-type TaskUpdateShape = Partial<
-  Omit<AggTask, "_id" | "user" | "createdAt" | "updatedAt">
->;
+type TaskUpdateShape = {
+  [K in keyof Omit<AggTask, "_id" | "user" | "createdAt" | "updatedAt">]?:
+    AggTask[K] | null | undefined;
+};
 
 interface UpdateTaskParams {
   taskId: Id;
@@ -331,8 +340,8 @@ const updateTask = async ({
 
 interface CreateTaskParams {
   userId: Id;
-  data: TaskUpdateShape;
-  idempotencyKey?: string;
+  data: Record<string, unknown>;
+  idempotencyKey?: string | undefined;
 }
 
 interface CreateTaskResult {
@@ -373,14 +382,18 @@ const createTask = async ({
       throw err;
     }
 
-    const task = await Task.create({ ...data, user: userId });
+    const task = (await Task.create(
+      compact({ ...data, user: userId }) as never
+    )) as unknown as AggTask & { toObject(): Record<string, unknown> };
     record.statusCode = 201;
     record.body = task.toObject() as Record<string, unknown>;
     await record.save();
     return { task };
   }
 
-  return { task: await Task.create({ ...data, user: userId }) };
+  return {
+    task: await Task.create(compact({ ...data, user: userId }) as never),
+  };
 };
 
 const softDeleteTasks = (userId: Id, ids: Id[]) =>
@@ -614,7 +627,7 @@ interface ImportResult {
 interface ImportParams {
   userId: Id;
   rows: unknown;
-  idempotencyKey?: string;
+  idempotencyKey?: string | undefined;
 }
 
 const importTasks = async ({
