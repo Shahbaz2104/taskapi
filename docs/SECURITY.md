@@ -9,7 +9,7 @@ A live `.env` file containing a MongoDB Atlas connection string (with embedded
 username/password) and the `JWT_SECRET` was committed early in this repository's
 life and remained tracked through later history. See `AUDIT.md` FIND-001.
 
-Untracking the file stops *future* changes from being committed, but the secret
+Untracking the file stops _future_ changes from being committed, but the secret
 values remain recoverable from earlier commits.
 
 ## Required manual actions
