@@ -16,13 +16,16 @@
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
-    "tasks",
     "api",
+    "esm",
     "express",
-    "mongodb",
     "jwt",
+    "mongodb",
+    "rbac",
     "rest",
-    "rbac"
+    "tasks",
+    "typescript",
+    "vitest"
   ],
   "author": "",
   "license": "MIT",
