@@ -25,10 +25,10 @@ ends with the full test suite green and a commit.
 
 ## 0. Manual prerequisites (USER — not agent)
 
-| #   | Action                                                          | Status                 |
-| --- | --------------------------------------------------------------- | ---------------------- |
-| 0.1 | Rotate MongoDB Atlas user password                              | ☐ **VERIFY WITH USER** |
-| 0.2 | New `JWT_SECRET` (`openssl rand -base64 48`) in local `.env`    | ☐ **VERIFY WITH USER** |
+| #   | Action                                                        | Status                 |
+| --- | ------------------------------------------------------------- | ---------------------- |
+| 0.1 | Rotate MongoDB Atlas user password                            | ☐ **VERIFY WITH USER** |
+| 0.2 | New `JWT_SECRET` (`openssl rand -base64 48`) in local `.env`  | ☐ **VERIFY WITH USER** |
 | 0.3 | Repo stays private until history purge (see `../SECURITY.md`) | ongoing                |
 
 ## Decisions (locked — do not relitigate)
