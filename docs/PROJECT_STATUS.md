@@ -29,7 +29,7 @@ Last updated: 2026-08-26 (post TypeScript migration — shipped to `main`)
 
 Findings and remediation mapping live in `AUDIT.md`. Highlights:
 
-- **FIND-001 (critical)**: real credentials were committed to git history at some point — **rotate the MongoDB Atlas password and `JWT_SECRET`** before exposing the repo publicly. Untracking `.env` is done; history scrubbing still pending (`docs/SECURITY.md`).
+- **FIND-001 (critical) RESOLVED 2026-08-27** — Atlas password + `JWT_SECRET` rotated; `.env` and `client/e2e/.auth/user.json` purged from all history via `git filter-repo` and force-pushed. Repo is export-ready; collaborators must re-clone.
 - FIND-002 (token-type confusion) mitigated by purpose-scoped 2FA challenge tokens.
 - FIND-005/FIND-006 fixed opportunistically during the trash phase (stats-cache invalidation; race-safe recurrence spawning).
 - FIND-007 (console.error in request paths) fixed during the TS migration — central handler logs via pino `req.log`.
@@ -55,7 +55,8 @@ Findings and remediation mapping live in `AUDIT.md`. Highlights:
 
 ## Suggested next steps
 
-1. Rotate leaked credentials (see AUDIT.md FIND-001) and scrub git history (`docs/SECURITY.md`).
+1. ~~Rotate leaked credentials + purge git history~~ **DONE 2026-08-27** (`docs/SECURITY.md`).
 2. Deploy behind a live URL; wire real PostHog/Sentry projects.
 3. Re-add Swagger annotations to `src/controllers`.
-4. Cursor pagination + frontend client (see README roadmap).
+4. Cursor pagination.
+5. Frontend `client/` P7 ship remainder: path-filtered CI client job, DEPLOY.md, README web-client section + GIFs (e2e is green and stays local-only — see `docs/planning/CONTINUE.md`).
