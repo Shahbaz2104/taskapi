@@ -17,7 +17,7 @@ const uri = mongo.getUri("taskapi-e2e");
 
 console.log(`[e2e] mongo ready at ${uri}`);
 
-const api = spawn("node", ["index.js"], {
+const api = spawn("npx", ["tsx", "src/server.ts"], {
   cwd: repoRoot,
   env: {
     ...process.env,

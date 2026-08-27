@@ -1,32 +1,66 @@
-# React + TypeScript + Vite
+# 🚀 TaskAPI Web Client
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A design-forward **Next.js 16 (App Router) + React 19 + TypeScript** web client for
+the TaskAPI backend (repo root). "Mission Control" dark theme — amber accent,
+constellation task hero, shadcn-style primitives, motion discipline.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Next.js 16** (App Router, Turbopack pinned to `client/`) · TypeScript strict
+- **Tailwind CSS v4** + token system in `globals.css` (shadcn var bridge)
+- **TanStack Query** — query keys, optimistic mutations, pure page reducers
+- **Zod + React Hook Form** — forms mirroring backend validation
+- **three / @react-three/fiber + drei** — isolated R3F constellation hero
+- **Phosphor icons** · `motion` (Framer Motion) · `lenis` smooth scroll
+- **Vitest** (unit) + **Playwright** (e2e, local-only)
 
-## React Compiler
+## Getting started
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The backend API is expected on `http://localhost:3000` (repo root):
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+cd client
+npm install
+npm run dev          # Next dev on http://localhost:5173
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Point the client at a deployed API with `NEXT_PUBLIC_API_URL` (defaults to
+`http://localhost:3000`).
+
+## Scripts
+
+| Command         | Description                              |
+| --------------- | ---------------------------------------- |
+| `npm run dev`   | Next dev on :5173                        |
+| `npm run build` | Production build (`next build`)          |
+| `npm start`     | Serve the build (PORT-able)              |
+| `npm run lint`  | oxlint                                   |
+| `npm test`      | Vitest unit suite (src only)             |
+| `npm run e2e`   | Playwright smoke (local-only, see below) |
+
+## E2E (local-only)
+
+`npx playwright test` boots two servers via `playwright.config.ts`:
+
+- `scripts/e2e-api.mjs` — in-memory MongoDB (pinned 7.0.14) + the real Express
+  API (`tsx src/server.ts`) on :3000
+- `next dev` on :5173
+
+`auth.setup.ts` registers a fresh user → storage state at
+`e2e/.auth/user.json` (gitignored). `smoke.spec.ts` runs one continuous
+flight: create → complete → trash → undo → restore → settings → sign out, using
+the worker-scoped `sharedPage` fixture (`e2e/fixtures.ts`).
+
+E2E intentionally stays out of CI (needs a mongod binary + Chromium).
+
+## Pages
+
+`/` landing · `/login` · `/register` · `/two-factor` · `/verify-email` ·
+`/forgot-password` · `/reset-password` · `/dashboard` · `/dashboard/task/[id]` ·
+`/trash` · `/settings` · `/shared`
+
+## API contracts
+
+`src/lib/api.ts` — fetch wrapper with single-flight silent refresh (access token
+in memory, refresh token in localStorage, rotation syncs `sessionId`). Backend
+route/contract details live in the repo-root `README.md`.

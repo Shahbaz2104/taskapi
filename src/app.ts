@@ -1,6 +1,18 @@
-import express, { type Express } from "express";
-import helmet from "helmet";
+import express, { type Express, type RequestHandler } from "express";
+import helmetModule from "helmet";
 import cors from "cors";
+
+// helmet ships dual ESM/CJS typings; some resolvers surface the default
+// import as the package namespace (not callable) — unwrap it like pino-http.
+const helmet =
+  (
+    helmetModule as unknown as {
+      default?: (options?: Record<string, unknown>) => RequestHandler;
+    }
+  ).default ??
+  (helmetModule as unknown as (
+    options?: Record<string, unknown>
+  ) => RequestHandler);
 import compression from "compression";
 import pinoHttpModule from "pino-http";
 
