@@ -130,36 +130,52 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** Exchange the stored refresh token for a fresh pair. Single-flight. */
-export async function refreshTokens(): Promise<boolean> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
-
-  const res = await fetch(`${API_BASE}${PREFIX}/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken }),
-  });
-  if (!res.ok) {
-    clearSession();
-    return false;
-  }
-  const data = (await res.json()) as {
-    accessToken: string;
-    refreshToken: string;
-  };
-  accessToken = data.accessToken;
-  storeRefreshToken(data.refreshToken);
-  return true;
-}
-
 let refreshInFlight: Promise<boolean> | null = null;
 
+/**
+ * Exchange the stored refresh token for a fresh pair.
+ *
+ * Single-flight at THIS level: concurrent callers (boot restore under
+ * React StrictMode double-effect, proactive timer + 401 retry, …) share
+ * one request. Refresh tokens are single-use and the API treats a
+ * revoked-token replay as theft — firing two rotations with the same
+ * token would nuke every session.
+ */
+export function refreshTokens(): Promise<boolean> {
+  refreshInFlight ??= (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return false;
+
+    try {
+      const res = await fetch(`${API_BASE}${PREFIX}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) {
+        clearSession();
+        return false;
+      }
+      const data = (await res.json()) as {
+        accessToken: string;
+        refreshToken: string;
+        sessionId?: string;
+      };
+      accessToken = data.accessToken;
+      storeRefreshToken(data.refreshToken);
+      // Rotation issues a NEW session doc — keep the stored id in sync or
+      // the "this device" badge (and per-session actions) go stale.
+      storeSessionId(data.sessionId);
+      return true;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
 function silentRefresh(): Promise<string | null> {
-  refreshInFlight ??= refreshTokens().finally(() => {
-    refreshInFlight = null;
-  });
-  return refreshInFlight.then((ok) => (ok ? accessToken : null));
+  return refreshTokens().then((ok) => (ok ? accessToken : null));
 }
 
 /** Decode a JWT payload's `exp` as epoch seconds, or null when malformed. */
