@@ -74,24 +74,31 @@ clean, prettier via root.
   task.completed, task.trashed, test.ping)
 - Password change endpoint? check `/me/password` existence in user_routes
 
-### P7 ship — IN PROGRESS (WIP `0f941a2`, resume here first)
+### P7 ship — E2E GREEN (fixes shipped on `feat/client-p7-ship`, PR #3)
 
 - E2E infra DONE & working: @playwright/test + chromium; config runs TWO
   webServers — scripts/e2e-api.mjs (mongodb-memory-server PINNED to
   MONGOMS_VERSION 7.0.14; cached 8.2.1 binary SIGSEGVs in this sandbox)
   spawning the real API on :3000, plus next dev on :5173.
 - auth.setup.ts project registers fresh user → storageState at
-  e2e/.auth/user.json (gitignored). smoke.spec.ts: create→complete→
-  trash→undo→restore→settings→signout.
-- STATUS: setup+test1 pass; test2 fails finding checkbox
-  Complete "Launch the falcon". NEAR-CERTAIN CAUSE: serial tests each get
-  a NEW page at about:blank and only test1 navigates. FIX: add
-  await page.goto("/dashboard") at top of tests 2–7, rerun npx playwright
-  test, expect green or small selector nudges after.
+  e2e/.auth/user.json (gitignored + now untracked from history).
+  smoke.spec.ts: create→complete→trash→undo→restore→settings→signout.
+- FIX LANDED: worker-scoped `sharedPage` fixture (e2e/fixtures.ts) + a
+  `page.goto("/dashboard")` at the top of every serial test — the
+  about:blank-per-test cause is gone. `e2e/fixtures.ts` must declare the
+  worker fixture in the **worker generic slot**
+  (`base.extend<{}, { sharedPage: Page }>`), not the test slot.
+- Found while fixing: `refreshTokens()` is now single-flight and syncs
+  `sessionId` on rotation — without it a StrictMode double-boot fire
+  rotated the same refresh token twice and nuked every session via the
+  backend's theft detection (and the "this device" badge went stale).
+- E2E runs **locally only** by design: needs a pinned mongod binary +
+  Chromium, so it stays out of CI for now.
+- STILL OPEN (next session, if picked up): ci.yml path-filtered client
+  job (lint/test/build only), DEPLOY.md, README web-client section +
+  GIFs, PROJECT_STATUS refresh.
 - Proven gotcha: router.replace from freshly-swapped success panel can
   lose pointer race in dev → spec uses dispatchEvent("click") there.
-- After e2e green: ci.yml client job (lint/test/build only), DEPLOY.md,
-  README web-client section + GIFs, PROJECT_STATUS refresh.
 
 ### P7 ship (original notes)
 
