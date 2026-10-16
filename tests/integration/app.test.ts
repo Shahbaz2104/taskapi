@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import jwt from "jsonwebtoken";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -172,5 +173,69 @@ describe("new TS tree auth + tasks flow", () => {
       .send({ refreshToken: alice.pair.refreshToken });
     expect(reuse.status).toBe(401);
     expect(reuse.body.error).toContain("reuse detected");
+  });
+});
+
+describe("token purpose enforcement (N-001)", () => {
+  let user: { pair: Pair; userId: string };
+
+  beforeAll(async () => {
+    user = await auth("purpose-it", "purpose-it@example.com");
+  });
+
+  const sign = (payload: object): string =>
+    jwt.sign(payload, "test-secret", { expiresIn: "5m" });
+
+  it("rejects a 2FA challenge token used as an access token", async () => {
+    const challenge = sign({ userId: user.userId, purpose: "2fa_challenge" });
+    const res = await request(app)
+      .get("/api/v1/me")
+      .set("Authorization", `Bearer ${challenge}`);
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("Invalid token");
+  });
+
+  it("rejects password-reset and verify-email tokens as access tokens", async () => {
+    const reset = sign({ userId: user.userId, purpose: "password_reset" });
+    const verify = sign({
+      email: "purpose-it@example.com",
+      purpose: "email_verify",
+    });
+    for (const token of [reset, verify]) {
+      const res = await request(app)
+        .get("/api/v1/me")
+        .set("Authorization", `Bearer ${token}`);
+      expect(res.status).toBe(401);
+    }
+  });
+
+  it("rejects legacy purposeless tokens", async () => {
+    const legacy = sign({ userId: user.userId });
+    const res = await request(app)
+      .get("/api/v1/me")
+      .set("Authorization", `Bearer ${legacy}`);
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects access tokens at the reset and verify endpoints", async () => {
+    const reset = await request(app)
+      .post("/api/v1/auth/reset-password")
+      .send({ token: user.pair.accessToken, password: "new-secret1" });
+    expect(reset.status).toBe(400);
+    expect(reset.body.error).toBe("Invalid or expired reset token");
+
+    const verify = await request(app)
+      .post("/api/v1/auth/verify-email")
+      .send({ token: user.pair.accessToken });
+    expect(verify.status).toBe(400);
+    expect(verify.body.error).toBe("Invalid or expired verification token");
+  });
+
+  it("still accepts a freshly issued access token (positive control)", async () => {
+    const res = await request(app)
+      .get("/api/v1/me")
+      .set("Authorization", `Bearer ${user.pair.accessToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.username).toBe("purpose-it");
   });
 });

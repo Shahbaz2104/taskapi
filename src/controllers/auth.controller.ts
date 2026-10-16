@@ -7,6 +7,10 @@ import { capture } from "../services/analytics.service.js";
 import { sendMail, wrap } from "../services/email.service.js";
 import { AuthenticationError } from "../errors/index.js";
 import type { UserDocument } from "../models/user.js";
+import type {
+  EmailVerifyPayload,
+  PasswordResetPayload,
+} from "../types/auth.js";
 
 const uaHeader = (req: Request): string | null => {
   const h = req.headers["user-agent"];
@@ -23,9 +27,13 @@ const compact = <T extends Record<string, unknown>>(obj: T): T => {
 };
 
 const sendVerificationEmail = async (user: UserDocument): Promise<string> => {
-  const token = jwt.sign({ email: user.email }, env.JWT_SECRET, {
-    expiresIn: "24h",
-  });
+  const token = jwt.sign(
+    { email: user.email, purpose: "email_verify" } satisfies EmailVerifyPayload,
+    env.JWT_SECRET,
+    {
+      expiresIn: "24h",
+    }
+  );
   await sendMail({
     to: user.email,
     subject: "Verify your email",
@@ -187,8 +195,10 @@ const verifyEmail: RequestHandler = async (req, res) => {
   }
 
   const email =
-    typeof payload === "object" && payload !== null
-      ? (payload as { email?: string }).email
+    typeof payload === "object" &&
+    payload !== null &&
+    payload.purpose === "email_verify"
+      ? (payload as EmailVerifyPayload).email
       : undefined;
 
   const user = (await User.findOneAndUpdate(
@@ -211,9 +221,16 @@ const forgotPassword: RequestHandler = async (req, res) => {
   } as never);
   if (user) {
     capture(user._id, "password_reset_requested");
-    const token = jwt.sign({ userId: String(user._id) }, env.JWT_SECRET, {
-      expiresIn: "30m",
-    });
+    const token = jwt.sign(
+      {
+        userId: String(user._id),
+        purpose: "password_reset",
+      } satisfies PasswordResetPayload,
+      env.JWT_SECRET,
+      {
+        expiresIn: "30m",
+      }
+    );
     await sendMail({
       to: user.email,
       subject: "Reset your password",
@@ -241,8 +258,10 @@ const resetPassword: RequestHandler = async (req, res) => {
   }
 
   const userId =
-    typeof payload === "object" && payload !== null
-      ? (payload as { userId?: string }).userId
+    typeof payload === "object" &&
+    payload !== null &&
+    payload.purpose === "password_reset"
+      ? (payload as PasswordResetPayload).userId
       : undefined;
 
   const user = userId ? await User.findById(userId) : null;

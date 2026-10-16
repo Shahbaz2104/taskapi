@@ -34,7 +34,8 @@ const protect = async (
     if (
       !decoded ||
       typeof decoded !== "object" ||
-      typeof decoded.userId !== "string"
+      typeof decoded.userId !== "string" ||
+      decoded.purpose !== "access"
     ) {
       res.status(401).json({ error: "Invalid token" });
       return;

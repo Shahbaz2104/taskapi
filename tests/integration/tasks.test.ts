@@ -296,9 +296,11 @@ describe("Auth Routes", () => {
 
     const { User } = await import("../../src/models/user.js");
     const user = await User.findOne({ username: "resetuser" });
-    const resetToken = jwt.sign({ userId: String(user?._id) }, "test-secret", {
-      expiresIn: "30m",
-    });
+    const resetToken = jwt.sign(
+      { userId: String(user?._id), purpose: "password_reset" },
+      "test-secret",
+      { expiresIn: "30m" }
+    );
     const res = await request(app)
       .post("/api/v1/auth/reset-password")
       .send({ token: resetToken, password: "newpass1" });

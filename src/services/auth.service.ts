@@ -6,7 +6,10 @@ import { env } from "../config/env.js";
 import { Token } from "../models/token.js";
 import { User, type UserAttrs, type UserDocument } from "../models/user.js";
 import { AuthenticationError, NotFoundError } from "../errors/index.js";
-import type { ChallengeTokenPayload } from "../types/auth.js";
+import type {
+  ChallengeTokenPayload,
+  DecodedAccessToken,
+} from "../types/auth.js";
 
 const CHALLENGE_TTL = "5m";
 const RECOVERY_CODE_COUNT = 8;
@@ -40,9 +43,13 @@ const findUserByFeedToken = (token: string) =>
   User.findOne({ calendarFeedToken: token }).select("_id username email");
 
 const signAccessToken = (userId: string | Types.ObjectId): string =>
-  jwt.sign({ userId }, env.JWT_SECRET, {
-    expiresIn: env.ACCESS_TOKEN_TTL,
-  });
+  jwt.sign(
+    { userId: String(userId), purpose: "access" } satisfies DecodedAccessToken,
+    env.JWT_SECRET,
+    {
+      expiresIn: env.ACCESS_TOKEN_TTL,
+    }
+  );
 
 interface SessionMeta {
   ip?: string | null | undefined;
