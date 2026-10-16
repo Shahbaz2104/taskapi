@@ -381,6 +381,8 @@ and swap the static CI badge for a live one from GitHub's actions page.
 
 | Doc                                              | What it covers                                                                                                  |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| [`docs/USER_MANUAL.md`](docs/USER_MANUAL.md)     | User & testing manual — quick start, curl walkthrough of every feature, web-console tour, 15-min test script    |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md)               | Deployment guide — Atlas + Render/Railway API + Vercel client, env matrix, smoke test                           |
 | [`docs/AUDIT-2026-10.md`](docs/AUDIT-2026-10.md) | Full security & architecture audit — 41 findings with `file:line` evidence, coverage analysis, remediation plan |
 | [`docs/AUDIT.md`](docs/AUDIT.md)                 | Previous audit (Aug 2026) — 14 findings, reconciled in the 2026-10 report                                       |
 | [`docs/SECURITY.md`](docs/SECURITY.md)           | Threat model & security posture                                                                                 |
