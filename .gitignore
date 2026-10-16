@@ -150,3 +150,7 @@ client/e2e/.auth/
 # Local working notes / agent spec files (never commit)
 prompt.txt
 features.txt
+
+# locally-installed agent skills (third-party)
+.agents/
+skills-lock.json

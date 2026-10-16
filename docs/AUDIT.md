@@ -1,5 +1,7 @@
 # 🔍 TaskAPI — Full Audit Report
 
+> **ℹ️ Superseded by [`AUDIT-2026-10.md`](./AUDIT-2026-10.md)** (2026-10-16) — that pass reconciles every finding below (FIND-001…014) against the post-TypeScript-migration code, covers `client/` for the first time, and adds 41 new findings. This document is kept as the historical baseline.
+
 > **Date:** 2026-08-23 · **Scope:** security, code quality, architecture, tests, config · **Mode:** document-only (findings recorded; no retroactive fixes — remediation happens only where upcoming features touch the same code)
 >
 > **Baseline at audit time:** lint ✅ clean · prettier ✅ clean · `npm audit` ✅ 0 vulnerabilities · tests ✅ 83/83 passing (~49s) · coverage gates ✅ met (statements ~82%, lines ~85%)
