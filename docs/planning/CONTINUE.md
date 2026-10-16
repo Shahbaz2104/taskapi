@@ -1,130 +1,82 @@
 # CONTINUE.md — where we left off
 
-> Backend API migrated to TypeScript/ESM/Vitest — status & next steps:
-> **docs/planning/PLAN.md** (Steps 1–4 + cutover DONE; only ship-prep remains).
+> **Read this first next session. Update it at the end of every session.**
 
-_Last updated: 2026-08-23 (end of Phase 4 session)_
-_Read this first next session. Update it at the end of every phase._
+_Last updated: 2026-10-16 (end of audit + security-fix session)_
 
-## Mission
+## Current state (2026-10-16)
 
-Build a design-forward **Next.js web client** (`client/`) for the TaskAPI
-backend, using the full design toolkit: shadcn/ui registry, React Bits-style
-primitives (`src/components/bits/`), KokonutUI-style pieces
-(`src/components/kokonut/`), Phosphor icons, R3F constellation hero, Lenis
-smooth scroll, and motion discipline from Emil Kowalski's philosophy
-(functional UI ≤300ms ease-out; delight budget only on landing/first-run).
+- **`main` is green and merged**: PR #3 (P7 client ship + audit pass + N-001/N-010 fixes, merged by user as `e85a1ba`) and PR #4 (USER_MANUAL + DEPLOY.md + lockfile fix, merged as `0d3224b`). CI success on main (Node 20 + 22); `npm audit` 0; **189/189** tests.
+- **Vercel**: Production deployment created from `0d3224b` (15:07 UTC). Client project root = `client/`. Dashboard needs `NEXT_PUBLIC_API_URL` → live API URL once the API is hosted.
+- **API hosting**: NOT yet done — still localhost/Docker only. Plan = Render/Railway + Atlas + Upstash, walkthrough in **`docs/DEPLOY.md`** (§ env matrix + smoke test). Requires user's account logins.
+- **Docs on main**: `docs/AUDIT-2026-10.md` (41 findings, remediation plan), `docs/USER_MANUAL.md` (test walkthrough), `docs/DEPLOY.md`, refreshed README (portfolio).
+- **Untracked**: `new_plan.md` at repo root (private master spec — deliberately NOT committed).
 
-Design direction locked: **dark "Mission Control"** — base `#0a0e14`,
-amber `#f5a623` accent used sparingly, Clash Display / Instrument Sans /
-JetBrains Mono. Signature element = task-node constellation (hero echo:
-tiny amber pulse dot for live sync).
+## What this session did (2026-10-16)
 
-## Done (commits on `origin/main`, all pushed)
+1. **Audit pass 2026-10** (report-only): 41 findings — 2C/7H/27M/4L/1I; reconciled FIND-001..014; master-plan coverage table; doc-drift trail (7 false doc claims, corrected in README/PROJECT_STATUS).
+2. **N-001 FIXED** (`a2acde7`): `protect()` enforces `purpose === "access"` (allow-list); all 4 JWT signers tag purpose (`access`/`2fa_challenge`/`password_reset`/`email_verify`); reset/verify endpoints assert their own purpose; 5 regression tests in `tests/integration/app.test.ts`.
+3. **N-010 FIXED** (`44db66d`): `npm audit fix` + nodemailer 9→10 → 0 vulns.
+4. **Lockfile fix** (`e0b0f6f`): explicit `yaml@^2.9.1` devDep — breaks the npm ci dedupe deadlock (swagger-jsdoc pins `yaml@2.0.0-1` exactly; vite needs ^2.4.2; npm collapsed them into an invalid tree). Stable across `npm install` AND `npm ci`.
+5. User manual + deploy guide + portfolio README refresh; Vercel production deploy triggered.
 
-| Commit    | What                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `6226e83` | P0 foundation: Next 16 + React 19 + TS scaffold, token system in `globals.css` (incl. shadcn var bridge), `api.ts` silent-refresh wrapper (single-flight, retry-once), AuthProvider (boot restore, proactive exp-based refresh, logout), Button/Input primitives, root repo scoping (eslint ignores client/**, jest skips client paths)                                                                                                        |
-| `ef0335a` | P1 landing: R3F constellation hero (48 nodes, completion edges w/ travelling amber pulses, damped pointer parallax, three.js isolated 868K lazy chunk via dynamic ssr:false + ErrorBoundary + fine-pointer/reduced-motion gates); SplitText/CountUp/Marquee/Reveal/SpotlightCard bits; GridPattern/ShimmerButton kokonut pieces; SiteNav; stats band; 3 scroll chapters (2FA mock / team panel / webhook terminal); stack marquee; CTA; footer |
-| `26c7ed6` | P2 auth: `(auth)` route group — login (**username** not email!), `/two-factor` w/ paste-split OtpInput + recovery toggle (challengeToken via sessionStorage `taskapi.challenge`), register (backend returns pair → `adopt()`; dev verificationUrl banner), verify-email/forgot/reset with Suspense-wrapped searchParams; zod schemas in `lib/schemas.ts`; error shake                                                                          |
-| `1d10486` | P3 tasks core: query-key factory + optimistic mutations w/ pure page reducers (identity-preserving patch); TaskDialog (shadcn Dialog + RHF + zod mirroring backend rules); TaskRow (animated complete circle, priority chips, dayjs relative overdue, hover menu); dashboard board w/ status tabs, debounced search, 6 sorts, pagination, skeletons, empty states                                                                              |
-| `520c89e` | P4 trash+stats+export: `apiText()`, trash/bulk/stats/export API fns, useTrash/useTrashMutations/useStats, dashboard stat cards (CountUp) + recharts priority-mix bar + CSV blob download + delete-toast **Undo→restore**, `/trash` page (restore/purge/empty behind AlertDialogs), AppNav Deck/Trash active links. Hand-wrote alert-dialog primitive after CLI flaked                                                                          |
-| `7158f09` | P6 settings hub: /settings tabs Devices/Security/Integrations — sessions w/ current-device badge (token pairs carry sessionId, persisted), 2FA wizard QR→verify→codes-once + disable force-relogin, password change (same signout-everywhere), calendar feed copy/rotate-warning, webhooks manager (create dialog w/ event checkboxes, optimistic toggle, ping queue-offline toast, secret shown-once)                                         |
-| `aa4fa82` | P5 collaboration: collab-api contracts; use-collab hooks (optimistic comment prepend w/ "sending…" marker, optimistic revoke); `/dashboard/task/[id]` detail w/ Tabs Comments/Activity/Access (Access owner-only, viewer 403 → read-only hint), SharePanel grant/revoke, ActivityTimeline rail, `/shared` inbox w/ role badges; TaskRow titles link in; nav "Shared"                                                                           |
+## TODO — next session (in order)
 
-Backend untouched this whole stretch (149 tests). Client gates each phase:
-oxlint clean (only known fast-refresh warnings), vitest 12/12, `next build`
-clean, prettier via root.
+### 1. API hosting (user + assistant)
 
-## Key contracts (verified against backend code)
+- Follow `docs/DEPLOY.md`: Atlas M0 → Upstash → Render/Railway web service (Docker or `npm ci && npm run build && npm start`, healthcheck `/ready`) → set env matrix.
+- Then wire: client Vercel env `NEXT_PUBLIC_API_URL=https://<api>`; API `CORS_ORIGIN`/`CLIENT_BASE_URL` = Vercel domain; re-deploy both; run DEPLOY.md §5 smoke test.
+- Note: workers (email/reminders/trash/webhooks) run in-process at N=1 only (see audit N-006/N-011).
 
-- API base: `${NEXT_PUBLIC_API_URL:-http://localhost:3000}/api/v1`; CORS defaults `*`
-- Login: POST `/auth/login {username,password}` → pair OR `{requires2FA:true, challengeToken}` → POST `/auth/2fa/challenge {challengeToken, code|recoveryCode}`
-- Register returns the pair (+ dev-only `verificationUrl`)
-- Tasks list: `{tasks,total,page,limit,totalPages}`; sorts `-createdAt|createdAt|-updatedAt|dueDate|-dueDate|-priority`; status enum `pending|in_progress|completed`
-- Trash: GET `/tasks/trash`; restore/purge via PATCH `/tasks/bulk {ids[1..100], action: complete|trash|restore|purge}`; empty via DELETE `/tasks/trash` → `{deleted}`
-- Stats: `{total, byStatus{pending,in_progress,completed}, byPriority{low,medium,high}, overdue}` (Redis-cached)
-- Export: GET `/tasks/export` → text/csv attachment
-- Errors always `{error}` → ApiError; Mongo `_id` everywhere
+### 2. Audit remediation (next priorities from `docs/AUDIT-2026-10.md` Part 5)
+
+- **Availability cluster** — N-002/N-032 (Redis command timeout / `passOnStoreError` / cache fallback) + N-011 (Redis reconnect supervisor; `/ready` should fail when REDIS_URL set but unreachable). Effort M.
+- **N-003** — verify-email `as never` type guard (S).
+- **N-004** — webhook SSRF guards: scheme/DNS/private-range/redirect:manual + body cancel (M). Mandated by new_plan.md §12.
+- **N-008** — OpenAPI path annotations or zod-to-openapi; `servers` from `API_PUBLIC_URL` (M) — currently `/api-docs` is an empty shell.
+- **N-009** — client hardening: HttpOnly refresh cookie via Next BFF + CSP + session epoch (M–L).
+- Remaining Mediums/Lows in backlog table (audit Part 5 rows 12–17).
+
+### 3. Smaller leftovers
+
+- **N-040**: path-filtered client CI job in ci.yml (lint/test/build in `client/`).
+- README screenshots/GIFs of landing + deck + 2FA (cosmetic, portfolio).
+- `npm audit` in CI (audit currently manual).
+- Consider gitleaks/trufflehog in CI (audit Part 6 tooling note).
+
+## Key contracts (current)
+
+- API base: `${NEXT_PUBLIC_API_URL:-http://localhost:3000}/api/v1`; set `CORS_ORIGIN` in production (default `*`).
+- **JWT purposes (N-001, new)**: access tokens carry `purpose:"access"`; challenge `2fa_challenge`; reset `password_reset`; verify `email_verify`. `protect()` rejects anything else. Pre-fix tokens (no purpose) are rejected — clients recover via refresh; old emailed links must be re-requested.
+- Login: `{username,password}` → pair OR `{requires2FA:true, challengeToken}` → POST `/auth/2fa/challenge {challengeToken, code|recoveryCode}`; enable-2FA body is `{token}` (6-digit), change-password is `{currentPassword,newPassword}`, `DELETE /me` takes no body.
+- Tasks list `{tasks,total,page,limit,totalPages}`; bulk `{ids[1..100], action}`; stats cached 60s (invalidate-on-update still missing — FIND-005/N-017).
+- Errors always `{error}`; Mongo `_id` everywhere.
 
 ## Gotchas learned (don't rediscover)
 
-1. `sessionStorage` in useState initializer breaks prerender — read inside useEffect.
-2. useSearchParams needs `<Suspense>` wrapper or build fails on static pages.
-3. RTL auto-cleanup is OFF without vitest globals — `cleanup()` lives in `src/test/setup.ts`.
-4. RHF+zod transform schema: don't give useForm an explicit input generic; cast defaultValues instead (`as TaskFormIn`).
-5. oxlint purity/refs/immutability rules are strict: no Math.random during render (useFrame callbacks OK), mutable GPU buffers live in a lazy `simRef` touched only in useFrame, geometries attached imperatively via element refs.
-6. shadcn CLI can half-fail mid-add (button overwrite prompt) — primitives are hand-writable; check `ls src/components/ui`.
-7. Turbopack root pinned to `client/` in next.config.ts (parent has backend lockfile).
-8. Backend loginLimiter etc irrelevant client-side; NODE_ENV=test behaviors don't apply to client.
-
-## TODO — next phases
-
-### P6 settings hub ✅ done
-
-- Sessions/devices: GET `/me/sessions` (list w/ ip/userAgent/current flag),
-  DELETE `/me/sessions/:sessionId`, revoke-all exists too — check user_controller
-- 2FA wizard: POST `/auth/2fa/setup` (returns QR dataURL + secret?) → verify code →
-  enable shows recovery codes ONCE (copy/download) ; disable w/ password+code;
-  exact shapes: read auth_controller lines ~200-360 before building
-- Calendar feed: GET `/me/calendar-feed` → `{token,url}`, POST rotate;
-  copy button + rotate confirm (old URL dies)
-- Webhooks manager: CRUD `/me/webhooks` + ping; secret shown-once banner;
-  events checkboxes from config/constants WEBHOOK_EVENTS (task.created,
-  task.completed, task.trashed, test.ping)
-- Password change endpoint? check `/me/password` existence in user_routes
-
-### P7 ship — E2E GREEN (fixes shipped on `feat/client-p7-ship`, PR #3)
-
-- E2E infra DONE & working: @playwright/test + chromium; config runs TWO
-  webServers — scripts/e2e-api.mjs (mongodb-memory-server PINNED to
-  MONGOMS_VERSION 7.0.14; cached 8.2.1 binary SIGSEGVs in this sandbox)
-  spawning the real API on :3000, plus next dev on :5173.
-- auth.setup.ts project registers fresh user → storageState at
-  e2e/.auth/user.json (gitignored + now untracked from history).
-  smoke.spec.ts: create→complete→trash→undo→restore→settings→signout.
-- FIX LANDED: worker-scoped `sharedPage` fixture (e2e/fixtures.ts) + a
-  `page.goto("/dashboard")` at the top of every serial test — the
-  about:blank-per-test cause is gone. `e2e/fixtures.ts` must declare the
-  worker fixture in the **worker generic slot**
-  (`base.extend<{}, { sharedPage: Page }>`), not the test slot.
-- Found while fixing: `refreshTokens()` is now single-flight and syncs
-  `sessionId` on rotation — without it a StrictMode double-boot fire
-  rotated the same refresh token twice and nuked every session via the
-  backend's theft detection (and the "this device" badge went stale).
-- E2E runs **locally only** by design: needs a pinned mongod binary +
-  Chromium, so it stays out of CI for now.
-- STILL OPEN (next session, if picked up): ci.yml path-filtered client
-  job (lint/test/build only), DEPLOY.md, README web-client section +
-  GIFs, PROJECT_STATUS refresh.
-- Proven gotcha: router.replace from freshly-swapped success panel can
-  lose pointer race in dev → spec uses dispatchEvent("click") there.
-
-### P7 ship (original notes)
-
-- Route-level splitting audit (three.js already isolated), bundle analyze
-- Lighthouse ≥90 perf on landing
-- Playwright smoke: register→create→complete→delete→restore→logout (needs API running; script it)
-- Deploy: Vercel (client) + Render/Railway (API) + Atlas + Upstash; set
-  NEXT_PUBLIC_API_URL + API CORS_ORIGIN to Vercel domain
-- README: screenshots/GIFs of landing + deck + 2FA, cross-link section,
-  update PROJECT_STATUS.md
-- CI: add path-filtered client job (npm ci/lint/test/build in client/) to ci.yml
-
-### Standing items
-
-- FIND-001 (user action): rotate Atlas password + JWT_SECRET; .env still tracked in history
-- Root README mentions old stack facts? Recheck after P7 deploy URLs exist
+1. **swagger-jsdoc@6.3.0 pins `yaml@2.0.0-1` exactly** — never remove the root `yaml@^2.9.1` devDep; npm dedupe will re-break `npm ci` (symptom: `Missing: yaml@2.9.1 from lock file`). A global `overrides: {yaml}` breaks swagger-jsdoc at runtime (`keepCstNodes` error) — the devDep inversion is the working fix.
+2. **gh pr edit fails on this repo** (classic-Projects GraphQL deprecation) — use `gh api -X PATCH repos/.../pulls/N -f title=... -f body=...`.
+3. nodemailer v9→v10 is safe here (only `createTransport`/`sendMail` used); v10 requires Node ≥20.
+4. JWT contract: `jwt.sign({userId})` without `satisfies` type breaks typecheck once `purpose` is required — use `String(userId)` + `satisfies Payload`.
+5. Client gotchas (still valid): sessionStorage-in-initializer breaks prerender; useSearchParams needs Suspense; Turbopack root pinned to `client/`; e2e local-only (pinned MONGOMS 7.0.14 + chromium), worker fixture goes in the worker generic slot.
+6. `npm install` may leave an "extraneous" yaml under vitest — harmless; `npm ci` from the committed lock is the source of truth.
 
 ## Commands cheat-sheet
 
 ```bash
-cd client && npm run dev        # Next dev on :5173 (API expected on :3000)
+# backend (repo root)
+npm test                    # vitest, 189 tests
+npm run typecheck | lint | format:check
+npm audit                   # must stay 0
+docker compose up --build   # app+mongo+redis for manual testing
+docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit   # email catcher (see USER_MANUAL §1)
+
+# client
+cd client && npm run dev    # :5173, needs API on :3000
 cd client && npm run lint | test | build
-npx prettier --write client     # from repo root, then commit
-# backend: npm test (jest, 149) — runs from repo root
+
+# ops
+gh pr checks 4; gh run list --limit 3
 ```
 
-Start next session by reading this file, then `git log --oneline -8`,
-then begin P5 with a contract-verification grep of collab controller/routes
-(exactly like every phase so far).
+Start next session here → `git log --oneline -8` → pick up TODO §1 (API hosting) or §2 (audit remediation, N-002/N-011 cluster first).
