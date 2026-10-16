@@ -1,5 +1,7 @@
 # 🔍 TaskAPI — Full Audit Report
 
+> **ℹ️ Superseded by [`AUDIT-2026-10.md`](./AUDIT-2026-10.md)** (2026-10-16) — that pass reconciles every finding below (FIND-001…014) against the post-TypeScript-migration code, covers `client/` for the first time, and adds 41 new findings. This document is kept as the historical baseline.
+
 > **Date:** 2026-08-23 · **Scope:** security, code quality, architecture, tests, config · **Mode:** document-only (findings recorded; no retroactive fixes — remediation happens only where upcoming features touch the same code)
 >
 > **Baseline at audit time:** lint ✅ clean · prettier ✅ clean · `npm audit` ✅ 0 vulnerabilities · tests ✅ 83/83 passing (~49s) · coverage gates ✅ met (statements ~82%, lines ~85%)
@@ -22,7 +24,7 @@ The codebase is well-structured for its scale — clean layering (`routes → co
 
 ## Findings
 
-### 🔴 FIND-001 — Live secrets committed and pushed to GitHub (Critical)
+### 🔴 FIND-001 — Live secrets committed and pushed to GitHub (Critical) — ✅ RESOLVED 2026-08-27
 
 - **Location:** `.env` (tracked file), first committed in `282650d`, present through `HEAD` → pushed to `origin/main` (`github.com/Shahbaz2104/taskapi`)
 - **Evidence:** `git ls-files --error-unmatch .env` succeeds; `git show HEAD:.env` contains a full Atlas connection string with embedded username/password and `JWT_SECRET`
@@ -32,6 +34,7 @@ The codebase is well-structured for its scale — clean layering (`routes → co
   2. `git rm --cached .env` so future changes stop being committed
   3. Purge history (`git filter-repo --path .env --invert-paths`) or squash into a fresh initial commit before the repo goes public
   4. Verify no forks/clones exist once public
+- **Resolution 2026-08-27:** both secrets rotated; `.env` and `client/e2e/.auth/user.json` (live e2e refresh token, committed in `0f941a2`) purged from all history with `git filter-repo`; history force-pushed; repo export-ready. Collaborators must re-clone. (`docs/SECURITY.md`.)
 
 ### 🟠 FIND-002 — Password-reset tokens are accepted as access tokens (High)
 

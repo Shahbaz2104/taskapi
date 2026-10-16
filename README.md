@@ -7,7 +7,7 @@
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![CI](https://img.shields.io/badge/CI-passing-brightgreen)
 
-A production-grade **RESTful Task Management API** built with **TypeScript (native ESM)** on **Node.js + Express 5**, **MongoDB (Mongoose)**, and **Redis**. Users register, log in with **JWT access + rotating refresh tokens** (optionally hardened with **TOTP two-factor auth and recovery codes**), and manage tasks with priorities, due dates, tags, search, recurrence, **soft-delete trash**, **bulk operations**, **CSV/JSON import**, an **iCal calendar feed**, **webhooks**, and **task sharing with comments and an activity trail**. Includes RBAC, email verification, password reset, due-date reminders, rate limiting, idempotency, **PostHog product analytics**, and **Sentry error tracking** — fully covered by **184 Vitest integration & unit tests**.
+A production-grade **RESTful Task Management API** built with **TypeScript (native ESM)** on **Node.js + Express 5**, **MongoDB (Mongoose)**, and **Redis**. Users register, log in with **JWT access + rotating refresh tokens** (optionally hardened with **TOTP two-factor auth and recovery codes**), and manage tasks with priorities, due dates, tags, search, recurrence, **soft-delete trash**, **bulk operations**, **CSV/JSON import**, an **iCal calendar feed**, **webhooks**, and **task sharing with comments and an activity trail**. Includes RBAC, email verification, password reset, due-date reminders, rate limiting, idempotency, **PostHog product analytics**, and **Sentry error tracking** — fully covered by **184 Vitest integration & unit tests**. A matching **Next.js 16 web client** (`client/`) provides the full user console: auth + 2FA, dashboard, task detail with comments/activity, trash, shared inbox, and account settings.
 
 ---
 
@@ -16,11 +16,11 @@ A production-grade **RESTful Task Management API** built with **TypeScript (nati
 ### Core
 
 - 🔐 **Full auth lifecycle** — register (email verification), login, refresh-token rotation with theft detection, logout, forgot/reset password
-- 🔢 **Two-factor authentication** — TOTP enrollment (`otplib`) with QR code, purpose-scoped challenge tokens for the login handshake, and 8 single-use hashed recovery codes
+- 🔢 **Two-factor authentication** — TOTP enrollment (`otplib`) with QR code, short-lived challenge tokens for the login handshake, and 8 single-use hashed recovery codes
 - 💻 **Session/device management** — every login records IP + user agent; list active sessions and revoke any of them individually
 - 📋 **Rich task domain** — `priority`, `dueDate`, `tags`, `in_progress` status, `recurrence` (daily/weekly/monthly)
 - 🔎 **Search & sort** — full-text search, sort by createdAt/updatedAt/dueDate/priority rank
-- 📊 **Stats endpoint** — counts by status/priority, overdue, completion rate (Redis-cached 60s, invalidated on mutations)
+- 📊 **Stats endpoint** — counts by status/priority, overdue, completion rate (Redis-cached 60s, invalidated on create/delete/bulk/import)
 
 ### Task power features
 
@@ -39,7 +39,8 @@ A production-grade **RESTful Task Management API** built with **TypeScript (nati
 
 ### Platform
 
-- 🛡️ **Security** — helmet, CORS, Redis-backed rate limiting (global + login/register/forgot/reset/2FA challenge), bcrypt, refresh-token reuse detection, generic 5xx responses
+- 🛡️ **Security** — helmet, CORS, layered rate limiting (shared global limiter + tighter per-route budgets on auth endpoints), bcrypt, refresh-token reuse detection, generic 5xx responses
+- 🖥️ **Web client** — Next.js 16 + React 19 + TanStack Query + Tailwind 4 console (auth/2FA, dashboard, task detail, trash, sharing, settings) — see [`client/`](client/)
 - 🧾 **Idempotency** — `Idempotency-Key` header dedupes retries on `POST /tasks` and task imports (Mongo-backed, TTL 24h)
 - 📈 **Analytics & errors** — PostHog product events through a soft-fail seam; Sentry captures route errors + queue failures without DSN-configured noise in dev
 - 📖 **OpenAPI-served API** — Swagger UI at `/api-docs` (endpoint annotations being re-added after the TS migration — see Known gaps)
@@ -85,12 +86,12 @@ A production-grade **RESTful Task Management API** built with **TypeScript (nati
 **Key design decisions**
 
 - **Stateless replicas** — access tokens are self-validating JWTs, so any instance can serve any request; no sticky sessions.
-- **Redis-backed rate limiting** — limits are shared across replicas; if Redis is down the app **fails soft** back to memory stores. Every optional integration (Redis, PostHog, Sentry, email) follows the same soft-fail rule: missing config or outage degrades gracefully instead of breaking requests.
+- **Shared, soft-fail infrastructure** — the global rate limiter and stats cache are Redis-backed and shared across replicas; if Redis is down the app **fails soft** back to in-memory stores. Every optional integration (Redis, PostHog, Sentry, email) follows the same soft-fail rule: missing config or outage degrades gracefully instead of breaking requests.
 - **Refresh tokens in MongoDB, not Redis** — rotated on every use, revoked on logout/password change/2FA changes, stored hashed (sha256), with theft detection (a revoked token being presented again revokes _all_ sessions).
-- **2FA challenge tokens are purpose-scoped** — a separate short-lived JWT claim means an auth challenge can never be replayed as an API access token (and vice versa).
+- **Purpose-tagged short-lived JWTs for the 2FA handshake** — the login challenge issues a 5-minute token tagged `2fa_challenge`, verified at a dedicated endpoint. Middleware-wide enforcement of the tag across all token types is the top item from the Oct 2026 security audit (see Roadmap).
 - **Access chokepoint for collaboration** — every shared-task route resolves permissions through `loadTaskWithAccess` (owner > editor > viewer). A failed lookup collapses to 404 so outsiders learn nothing about task existence.
 - **Async work via BullMQ** — emails, reminders, trash purges and webhook deliveries are enqueued and processed by workers; the request path never blocks. Webhook enqueueing is best-effort: a queue outage never fails the product action that triggered it.
-- **Service layer** — controllers stay thin (HTTP concerns only); business logic lives in `src/services/` and is unit-testable. All request validation is **zod** (`src/schemas/`) — the single source of truth.
+- **Service layer** — shared business logic lives in `src/services/` (tasks, auth, collaboration, webhooks) and is unit-testable. All request validation is **zod** (`src/schemas/`) — the single source of truth.
 - **Idempotent writes** — a unique `(user, key)` index reserves the response _before_ the mutation happens, so retries return the original result.
 - **Not over-engineered** — monolith-first with Redis/queue as the first extractable pieces when a real scaling driver appears.
 
@@ -208,7 +209,7 @@ POST /auth/logout    ──►  revokes the refresh token
 1. Send `Authorization: Bearer <accessToken>` on every protected request
 2. When the access token expires (15m), call `/auth/refresh` with the refresh token (7d)
 3. Refresh tokens are **rotated** on every use — a reused token revokes all sessions (theft detection)
-4. With 2FA enabled, login returns a **purpose-scoped challenge token** (5 min) instead of tokens; exchange it plus a TOTP/recovery code at `/auth/2fa/challenge`
+4. With 2FA enabled, login returns a **short-lived challenge token** (5 min, tagged `2fa_challenge`) instead of tokens; exchange it plus a TOTP/recovery code at `/auth/2fa/challenge`
 
 > Usernames 3–30 chars; passwords 6–72 chars; email verified via emailed link.
 > Login/register are rate-limited to **10 / 15 min** per IP; forgot-password and the 2FA challenge to **5 / 15 min**.
@@ -376,6 +377,17 @@ and swap the static CI badge for a live one from GitHub's actions page.
 
 ---
 
+## 📚 Documentation
+
+| Doc                                              | What it covers                                                                                                  |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| [`docs/AUDIT-2026-10.md`](docs/AUDIT-2026-10.md) | Full security & architecture audit — 41 findings with `file:line` evidence, coverage analysis, remediation plan |
+| [`docs/AUDIT.md`](docs/AUDIT.md)                 | Previous audit (Aug 2026) — 14 findings, reconciled in the 2026-10 report                                       |
+| [`docs/SECURITY.md`](docs/SECURITY.md)           | Threat model & security posture                                                                                 |
+| [`client/README.md`](client/README.md)           | Web client specifics                                                                                            |
+
+---
+
 ## 📝 Resume / Portfolio Description
 
 > Built a production-grade RESTful Task Management API (TypeScript ESM, Express 5, MongoDB, Redis):
@@ -386,6 +398,8 @@ and swap the static CI badge for a live one from GitHub's actions page.
 > breaking, task sharing with comments and an audit trail, PostHog analytics and Sentry error
 > tracking, Redis-backed rate limiting, BullMQ job workers, Prometheus metrics, Docker Compose,
 > and CI with typecheck/coverage/build gates — covered by 184 integration and unit tests.
+> Ships a matching Next.js 16 web client, and every claim is backed by a full security/architecture
+> audit with file:line evidence (`docs/AUDIT-2026-10.md`).
 
 ---
 
@@ -408,5 +422,11 @@ and swap the static CI badge for a live one from GitHub's actions page.
 - [x] Task sharing with comments and activity trail
 - [x] Full TypeScript (strict) + native ESM migration with zero behavior drift
 - [x] Jest → Vitest port (184 tests) + compiled-dist boot smoke in CI-ready scripts
+- [x] Next.js 16 web client (auth/2FA, dashboard, task detail, trash, sharing, settings)
+- [x] Full security & architecture audit pass (`docs/AUDIT-2026-10.md`, 41 findings)
+- [x] Enforce JWT `purpose` claims in `protect()` — closes the 2FA bypass (audit N-001)
+- [x] `npm audit` clean — 9 vulnerabilities cleared, incl. critical `proxy-addr` (N-010)
+- [ ] Webhook SSRF guards — scheme/DNS/private-range/redirect policy (N-004)
+- [ ] OpenAPI path annotations (N-008)
+- [ ] HttpOnly refresh cookie + CSP for the client (N-009)
 - [ ] Cursor-based pagination for deep pages
-- [ ] Frontend client (React) consuming the API

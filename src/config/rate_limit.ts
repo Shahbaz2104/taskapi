@@ -1,6 +1,18 @@
 import type { RequestHandler } from "express";
-import rateLimit, { type Options } from "express-rate-limit";
+import rateLimitModule, { type Options } from "express-rate-limit";
 import { RedisStore, type RedisReply } from "rate-limit-redis";
+
+// express-rate-limit ships dual ESM/CJS typings; some resolvers surface the
+// default import as the package namespace (not callable) — unwrap it.
+const rateLimit =
+  (
+    rateLimitModule as unknown as {
+      default?: (options?: Partial<Options>) => RequestHandler;
+    }
+  ).default ??
+  (rateLimitModule as unknown as (
+    options?: Partial<Options>
+  ) => RequestHandler);
 import { getClient, isAvailable } from "./redis.js";
 
 const buildLimiter = (options: Partial<Options>): RequestHandler => {
