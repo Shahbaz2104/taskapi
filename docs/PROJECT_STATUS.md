@@ -8,7 +8,7 @@ Last updated: 2026-10-16 (security & architecture audit pass — `AUDIT-2026-10.
 - **184 tests passing** across 16 files (full-app integration + unit); typecheck, ESLint, Prettier, coverage thresholds and a compiled-dist boot smoke all green
 - **Shipped via PR #2** (`203aeab`) with lockfile hotfix (`4c54d0e`); CI pipeline green on `main`: typecheck · lint · format · tests-with-coverage · build (Node 20 & 22)
 - Multi-stage Docker build (tsc → prod deps → slim runner); first real image build happens at deploy time
-- `npm audit`: **9 vulnerabilities** (1 critical, 6 high) as of 2026-10-16 — `npm audit fix` clears all; tracked as N-010
+- `npm audit`: **0 vulnerabilities** (2026-10-16) — `npm audit fix` + `nodemailer` 9→10 cleared the earlier 9 (N-010 fixed)
 
 ## What shipped (in commit order)
 
@@ -30,7 +30,7 @@ Last updated: 2026-10-16 (security & architecture audit pass — `AUDIT-2026-10.
 Findings and remediation mapping live in `AUDIT.md` (Aug 2026) and `AUDIT-2026-10.md` (current). Highlights:
 
 - **FIND-001 (critical) RESOLVED 2026-08-27** — Atlas password + `JWT_SECRET` rotated; `.env` and `client/e2e/.auth/user.json` purged from all history via `git filter-repo` and force-pushed. Repo is export-ready; collaborators must re-clone.
-- FIND-002 (token-type confusion) **partially mitigated** — challenge tokens carry a `purpose` claim, but `protect()` does not assert it; escalated to N-001 (Critical) in the 2026-10 audit.
+- FIND-002 (token-type confusion) **RESOLVED 2026-10-16** — `protect()` enforces `purpose === "access"`; all four JWT signers tag explicitly; regression tests added (was escalated as N-001, Critical).
 - FIND-005/FIND-006 **partially resolved** — double-spawn fixed; stats-cache invalidation misses `updateTask` (N-017); non-atomic recurrence residue (N-027).
 - FIND-007 (console.error in request paths) fixed during the TS migration — central handler logs via pino `req.log`.
 - **2026-10-16 full audit pass**: 41 new findings (2 Critical, 7 High, 27 Medium, 4 Low, 1 Info) with file:line evidence and a prioritized remediation plan — see `AUDIT-2026-10.md`.

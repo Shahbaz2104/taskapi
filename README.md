@@ -424,9 +424,9 @@ and swap the static CI badge for a live one from GitHub's actions page.
 - [x] Jest → Vitest port (184 tests) + compiled-dist boot smoke in CI-ready scripts
 - [x] Next.js 16 web client (auth/2FA, dashboard, task detail, trash, sharing, settings)
 - [x] Full security & architecture audit pass (`docs/AUDIT-2026-10.md`, 41 findings)
-- [ ] Enforce JWT `purpose` claims in `protect()` (audit N-001 — top priority)
+- [x] Enforce JWT `purpose` claims in `protect()` — closes the 2FA bypass (audit N-001)
+- [x] `npm audit` clean — 9 vulnerabilities cleared, incl. critical `proxy-addr` (N-010)
 - [ ] Webhook SSRF guards — scheme/DNS/private-range/redirect policy (N-004)
 - [ ] OpenAPI path annotations (N-008)
 - [ ] HttpOnly refresh cookie + CSP for the client (N-009)
-- [ ] `npm audit fix` — clear the 9 known dependency vulnerabilities (N-010)
 - [ ] Cursor-based pagination for deep pages
